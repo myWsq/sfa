@@ -1,0 +1,21 @@
+[package]
+name = "sfa-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+bitflags.workspace = true
+blake3.workspace = true
+crc32fast.workspace = true
+crossbeam-channel.workspace = true
+lz4_flex.workspace = true
+rayon.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+xxhash-rust.workspace = true
+zstd.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

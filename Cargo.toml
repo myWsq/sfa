@@ -1,0 +1,32 @@
+[workspace]
+members = [
+    "crates/sfa-core",
+    "crates/sfa-unixfs",
+    "crates/sfa-cli",
+    "crates/sfa-bench",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+rust-version = "1.85"
+version = "0.1.0"
+
+[workspace.dependencies]
+bitflags = "2.8"
+blake3 = "1.8"
+clap = { version = "4.5", features = ["derive"] }
+crc32fast = "1.4"
+crossbeam-channel = "0.5"
+filetime = "0.2"
+lz4_flex = "0.11"
+nix = { version = "0.30", features = ["fs", "time", "user"] }
+rayon = "1.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tempfile = "3.15"
+thiserror = "2.0"
+walkdir = "2.5"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+zstd = "0.13"

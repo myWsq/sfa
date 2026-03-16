@@ -1,0 +1,18 @@
+[package]
+name = "sfa-unixfs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+crossbeam-channel.workspace = true
+filetime.workspace = true
+nix.workspace = true
+rayon.workspace = true
+sfa-core = { path = "../sfa-core" }
+thiserror.workspace = true
+walkdir.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

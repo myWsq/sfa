@@ -1,0 +1,7 @@
+interface:
+  display_name: "发版管理"
+  short_description: "准备发版、changelog 和发布说明"
+  default_prompt: "Use $release-manager 帮我准备发版，并告诉我下一步最该做什么。"
+
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,13 @@
+[package]
+name = "sfa-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "CLI for SFA pack/unpack workflows"
+
+[dependencies]
+clap.workspace = true
+sfa-core = { path = "../sfa-core" }
+sfa-unixfs = { path = "../sfa-unixfs" }
+walkdir.workspace = true

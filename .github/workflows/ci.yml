@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Cargo test
+        run: cargo test --workspace
+      - name: Protocol smoke
+        run: bash tests/scripts/run_protocol_smoke.sh
+      - name: Streaming smoke
+        run: bash tests/scripts/run_streaming_smoke.sh
+      - name: Safety smoke
+        run: bash tests/scripts/run_safety_smoke.sh
+      - name: Roundtrip smoke
+        run: bash tests/scripts/run_roundtrip_smoke.sh
+      - name: Benchmark dry run
+        run: cargo run -p sfa-bench --bin tar_vs_sfa -- --dry-run --output benches/results/latest.json
