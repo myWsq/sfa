@@ -1,1 +1,10 @@
 /target
+
+# macOS filesystem metadata
+.DS_Store
+._*
+
+# Benchmark scratch outputs
+/tests/fixtures/datasets/*/output/*
+!/tests/fixtures/datasets/*/output/.gitkeep
+/benches/results/latest.json

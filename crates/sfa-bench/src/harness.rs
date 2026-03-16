@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Codec {
     Lz4,
@@ -16,7 +18,9 @@ impl Codec {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Baseline {
     Sfa,
@@ -48,7 +52,7 @@ impl CommandSpec {
         let mut line = self.program.clone();
         for arg in &self.args {
             line.push(' ');
-            line.push_str(arg);
+            line.push_str(&shell_escape(arg));
         }
         line
     }
@@ -97,11 +101,31 @@ pub fn archive_name(case_name: &str, baseline: Baseline, codec: Codec) -> String
     }
 }
 
-pub fn build_pack_command(job: &BenchmarkJob, sfa_bin: &Path) -> CommandSpec {
-    let archive = job
-        .case
+pub fn archive_path(job: &BenchmarkJob) -> PathBuf {
+    job.case
         .output_dir
-        .join(archive_name(&job.case.name, job.baseline, job.codec));
+        .join(archive_name(&job.case.name, job.baseline, job.codec))
+}
+
+pub fn unpack_dir(job: &BenchmarkJob) -> PathBuf {
+    job.case.output_dir.join(format!(
+        "unpack-{}-{}-{}",
+        job.case.name,
+        match job.baseline {
+            Baseline::Sfa => "sfa",
+            Baseline::Tar => "tar",
+        },
+        job.codec.as_str()
+    ))
+}
+
+pub fn build_pack_command(
+    job: &BenchmarkJob,
+    sfa_bin: &Path,
+    tar_bin: &Path,
+    codec_bin: &Path,
+) -> CommandSpec {
+    let archive = archive_path(job);
     match job.baseline {
         Baseline::Sfa => CommandSpec {
             program: sfa_bin.display().to_string(),
@@ -113,40 +137,18 @@ pub fn build_pack_command(job: &BenchmarkJob, sfa_bin: &Path) -> CommandSpec {
                 job.codec.as_str().to_string(),
             ],
         },
-        Baseline::Tar => {
-            let codec_flag = match job.codec {
-                Codec::Lz4 => "--lz4",
-                Codec::Zstd => "--zstd",
-            };
-            CommandSpec {
-                program: "tar".to_string(),
-                args: vec![
-                    "-cf".to_string(),
-                    archive.display().to_string(),
-                    codec_flag.to_string(),
-                    "-C".to_string(),
-                    job.case.input_dir.display().to_string(),
-                    ".".to_string(),
-                ],
-            }
-        }
+        Baseline::Tar => build_tar_pack_command(job, tar_bin, codec_bin, &archive),
     }
 }
 
-pub fn build_unpack_command(job: &BenchmarkJob, sfa_bin: &Path) -> CommandSpec {
-    let archive = job
-        .case
-        .output_dir
-        .join(archive_name(&job.case.name, job.baseline, job.codec));
-    let unpack_to = job.case.output_dir.join(format!(
-        "unpack-{}-{}-{}",
-        job.case.name,
-        match job.baseline {
-            Baseline::Sfa => "sfa",
-            Baseline::Tar => "tar",
-        },
-        job.codec.as_str()
-    ));
+pub fn build_unpack_command(
+    job: &BenchmarkJob,
+    sfa_bin: &Path,
+    tar_bin: &Path,
+    codec_bin: &Path,
+) -> CommandSpec {
+    let archive = archive_path(job);
+    let unpack_to = unpack_dir(job);
     match job.baseline {
         Baseline::Sfa => CommandSpec {
             program: sfa_bin.display().to_string(),
@@ -157,14 +159,68 @@ pub fn build_unpack_command(job: &BenchmarkJob, sfa_bin: &Path) -> CommandSpec {
                 unpack_to.display().to_string(),
             ],
         },
-        Baseline::Tar => CommandSpec {
-            program: "tar".to_string(),
-            args: vec![
-                "-xf".to_string(),
-                archive.display().to_string(),
-                "-C".to_string(),
-                unpack_to.display().to_string(),
-            ],
-        },
+        Baseline::Tar => build_tar_unpack_command(job, tar_bin, codec_bin, &archive, &unpack_to),
     }
+}
+
+fn build_tar_pack_command(
+    job: &BenchmarkJob,
+    tar_bin: &Path,
+    codec_bin: &Path,
+    archive: &Path,
+) -> CommandSpec {
+    let codec_script = match job.codec {
+        Codec::Lz4 => "\"$3\" -q -f - \"$4\"",
+        Codec::Zstd => "\"$3\" -q -f -o \"$4\"",
+    };
+    CommandSpec {
+        program: "sh".to_string(),
+        args: vec![
+            "-c".to_string(),
+            format!("set -eu; \"$1\" -cf - -C \"$2\" . | {codec_script}"),
+            "sh".to_string(),
+            tar_bin.display().to_string(),
+            job.case.input_dir.display().to_string(),
+            codec_bin.display().to_string(),
+            archive.display().to_string(),
+        ],
+    }
+}
+
+fn build_tar_unpack_command(
+    job: &BenchmarkJob,
+    tar_bin: &Path,
+    codec_bin: &Path,
+    archive: &Path,
+    unpack_to: &Path,
+) -> CommandSpec {
+    let codec_script = match job.codec {
+        Codec::Lz4 => "\"$1\" -q -d -c \"$2\"",
+        Codec::Zstd => "\"$1\" -q -d -c \"$2\"",
+    };
+    let _ = job;
+    CommandSpec {
+        program: "sh".to_string(),
+        args: vec![
+            "-c".to_string(),
+            format!("set -eu; {codec_script} | \"$3\" -xf - -C \"$4\""),
+            "sh".to_string(),
+            codec_bin.display().to_string(),
+            archive.display().to_string(),
+            tar_bin.display().to_string(),
+            unpack_to.display().to_string(),
+        ],
+    }
+}
+
+fn shell_escape(arg: &str) -> String {
+    if arg.is_empty() {
+        return "''".to_string();
+    }
+    if arg.bytes().all(
+        |b| matches!(b, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'/' | b':'),
+    ) {
+        return arg.to_string();
+    }
+    format!("'{}'", arg.replace('\'', "'\"'\"'"))
 }

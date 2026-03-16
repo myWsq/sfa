@@ -590,6 +590,7 @@ dependencies = [
  "serde_json",
  "sfa-core",
  "sfa-unixfs",
+ "walkdir",
 ]
 
 [[package]]

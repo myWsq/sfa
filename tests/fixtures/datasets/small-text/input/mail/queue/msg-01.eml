@@ -1,0 +1,8 @@
+From: queue-01@example.test
+To: ingest@example.test
+Subject: replay batch 01
+
+This fixture message is part of the deterministic small-text benchmark corpus.
+Batch=01
+Segments=3
+Checksum=MSG-01

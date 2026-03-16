@@ -86,7 +86,17 @@ bash tests/scripts/run_roundtrip_smoke.sh
 cargo run -p sfa-bench --bin tar_vs_sfa -- --dry-run --output benches/results/latest.json
 ```
 
-如果本次发版修改了 benchmark 逻辑或 planner / pipeline 参数，应额外保留真实 benchmark 结果，并在 release notes 中说明。
+如果本次发版修改了 benchmark 逻辑、默认 benchmark 数据集、planner / pipeline 参数、codec 集成或 benchmark 支持环境，应额外刷新 committed benchmark baseline，并在 release notes 中说明：
+
+```bash
+CARGO_HOME=/tmp/cargo-home cargo build --release -p sfa-cli
+./benches/scripts/run_tar_vs_sfa.sh \
+  --execute \
+  --sfa-bin target/release/sfa-cli \
+  --output benches/results/baseline-v0.1.0.json
+```
+
+刷新后应确认 `benches/results/baseline-v0.1.0.json` 已提交，且 `cargo test -p sfa-bench` 仍能读取并校验该结果资产。
 
 ### 4. 整理 release notes
 

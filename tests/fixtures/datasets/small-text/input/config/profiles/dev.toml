@@ -1,0 +1,4 @@
+profile = "dev"
+threads = 4
+codec = "lz4"
+integrity = "fast"

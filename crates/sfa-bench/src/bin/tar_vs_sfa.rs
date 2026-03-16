@@ -38,9 +38,9 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         i += 1;
     }
 
-    let cfg = RunnerConfig::new(sfa_bin, dry_run);
+    let cfg = RunnerConfig::new(sfa_bin, dry_run, args.join(" "));
     let jobs = default_matrix();
-    let report = run_jobs(&jobs, &cfg)?.stamp();
+    let report = run_jobs(&jobs, &cfg)?;
     write_report(&report, &out)?;
 
     println!("Wrote benchmark report to {}", out.display());

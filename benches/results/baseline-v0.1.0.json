@@ -1,0 +1,353 @@
+{
+  "generated_at_unix_s": 1773664174,
+  "invocation": "target/debug/tar_vs_sfa --sfa-bin target/release/sfa-cli --output benches/results/baseline-v0.1.0.json",
+  "dry_run": false,
+  "environment": {
+    "host_os": "macos",
+    "host_arch": "aarch64",
+    "tar": {
+      "name": "tar",
+      "path": "/usr/bin/tar",
+      "version": "bsdtar 3.5.3 - libarchive 3.5.3 zlib/1.2.12 liblzma/5.4.3 bz2lib/1.0.8"
+    },
+    "sfa": {
+      "name": "sfa",
+      "path": "target/release/sfa-cli",
+      "version": "sfa 0.1.0"
+    },
+    "codecs": [
+      {
+        "codec": "lz4",
+        "tool": {
+          "name": "lz4",
+          "path": "/opt/homebrew/bin/lz4",
+          "version": "*** lz4 v1.10.0 64-bit multithread, by Yann Collet ***"
+        }
+      },
+      {
+        "codec": "zstd",
+        "tool": {
+          "name": "zstd",
+          "path": "/opt/homebrew/bin/zstd",
+          "version": "*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***"
+        }
+      }
+    ]
+  },
+  "datasets": [
+    {
+      "dataset": "large-control",
+      "input_dir": "tests/fixtures/datasets/large-control/input",
+      "file_count": 2,
+      "directory_count": 3,
+      "symlink_count": 0,
+      "total_bytes": 4740516
+    },
+    {
+      "dataset": "small-binary",
+      "input_dir": "tests/fixtures/datasets/small-binary/input",
+      "file_count": 11,
+      "directory_count": 6,
+      "symlink_count": 0,
+      "total_bytes": 344064
+    },
+    {
+      "dataset": "small-text",
+      "input_dir": "tests/fixtures/datasets/small-text/input",
+      "file_count": 21,
+      "directory_count": 11,
+      "symlink_count": 0,
+      "total_bytes": 30745
+    }
+  ],
+  "records": [
+    {
+      "dataset": "small-text",
+      "baseline": "sfa",
+      "codec": "lz4",
+      "phase": "pack",
+      "command": "target/release/sfa-cli pack tests/fixtures/datasets/small-text/input tests/fixtures/datasets/small-text/output/small-text.lz4.sfa --codec lz4",
+      "elapsed_ms": 15,
+      "exit_status": 0,
+      "stdout": "Pack Summary\ncodec: Lz4\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 32\nbundle_count: 1\nraw_bytes: 30745\nencoded_bytes: 5847\nduration_seconds: 0.0090\nfiles_per_second: 3555.56\nmib_per_second: 3.26\n",
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "small-text",
+      "baseline": "sfa",
+      "codec": "lz4",
+      "phase": "unpack",
+      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/small-text/output/small-text.lz4.sfa -C tests/fixtures/datasets/small-text/output/unpack-small-text-sfa-lz4",
+      "elapsed_ms": 30,
+      "exit_status": 0,
+      "stdout": "Unpack Summary\ncodec: Lz4\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 32\nbundle_count: 1\nraw_bytes: 30745\nencoded_bytes: 5847\nduration_seconds: 0.0190\nfiles_per_second: 1684.21\nmib_per_second: 1.54\n",
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "small-text",
+      "baseline": "sfa",
+      "codec": "zstd",
+      "phase": "pack",
+      "command": "target/release/sfa-cli pack tests/fixtures/datasets/small-text/input tests/fixtures/datasets/small-text/output/small-text.zstd.sfa --codec zstd",
+      "elapsed_ms": 34,
+      "exit_status": 0,
+      "stdout": "Pack Summary\ncodec: Zstd\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 32\nbundle_count: 1\nraw_bytes: 30745\nencoded_bytes: 2788\nduration_seconds: 0.0230\nfiles_per_second: 1391.30\nmib_per_second: 1.27\n",
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "small-text",
+      "baseline": "sfa",
+      "codec": "zstd",
+      "phase": "unpack",
+      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/small-text/output/small-text.zstd.sfa -C tests/fixtures/datasets/small-text/output/unpack-small-text-sfa-zstd",
+      "elapsed_ms": 24,
+      "exit_status": 0,
+      "stdout": "Unpack Summary\ncodec: Zstd\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 32\nbundle_count: 1\nraw_bytes: 30745\nencoded_bytes: 2788\nduration_seconds: 0.0120\nfiles_per_second: 2666.67\nmib_per_second: 2.44\n",
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "small-text",
+      "baseline": "tar",
+      "codec": "lz4",
+      "phase": "pack",
+      "command": "sh -c 'set -eu; \"$1\" -cf - -C \"$2\" . | \"$3\" -q -f - \"$4\"' sh /usr/bin/tar tests/fixtures/datasets/small-text/input /opt/homebrew/bin/lz4 tests/fixtures/datasets/small-text/output/small-text.tar.lz4",
+      "elapsed_ms": 92,
+      "exit_status": 0,
+      "stdout": null,
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "small-text",
+      "baseline": "tar",
+      "codec": "lz4",
+      "phase": "unpack",
+      "command": "sh -c 'set -eu; \"$1\" -q -d -c \"$2\" | \"$3\" -xf - -C \"$4\"' sh /opt/homebrew/bin/lz4 tests/fixtures/datasets/small-text/output/small-text.tar.lz4 /usr/bin/tar tests/fixtures/datasets/small-text/output/unpack-small-text-tar-lz4",
+      "elapsed_ms": 113,
+      "exit_status": 0,
+      "stdout": null,
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "small-text",
+      "baseline": "tar",
+      "codec": "zstd",
+      "phase": "pack",
+      "command": "sh -c 'set -eu; \"$1\" -cf - -C \"$2\" . | \"$3\" -q -f -o \"$4\"' sh /usr/bin/tar tests/fixtures/datasets/small-text/input /opt/homebrew/bin/zstd tests/fixtures/datasets/small-text/output/small-text.tar.zstd",
+      "elapsed_ms": 83,
+      "exit_status": 0,
+      "stdout": null,
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "small-text",
+      "baseline": "tar",
+      "codec": "zstd",
+      "phase": "unpack",
+      "command": "sh -c 'set -eu; \"$1\" -q -d -c \"$2\" | \"$3\" -xf - -C \"$4\"' sh /opt/homebrew/bin/zstd tests/fixtures/datasets/small-text/output/small-text.tar.zstd /usr/bin/tar tests/fixtures/datasets/small-text/output/unpack-small-text-tar-zstd",
+      "elapsed_ms": 84,
+      "exit_status": 0,
+      "stdout": null,
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "small-binary",
+      "baseline": "sfa",
+      "codec": "lz4",
+      "phase": "pack",
+      "command": "target/release/sfa-cli pack tests/fixtures/datasets/small-binary/input tests/fixtures/datasets/small-binary/output/small-binary.lz4.sfa --codec lz4",
+      "elapsed_ms": 10,
+      "exit_status": 0,
+      "stdout": "Pack Summary\ncodec: Lz4\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 17\nbundle_count: 1\nraw_bytes: 344064\nencoded_bytes: 4886\nduration_seconds: 0.0060\nfiles_per_second: 2833.33\nmib_per_second: 54.69\n",
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "small-binary",
+      "baseline": "sfa",
+      "codec": "lz4",
+      "phase": "unpack",
+      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/small-binary/output/small-binary.lz4.sfa -C tests/fixtures/datasets/small-binary/output/unpack-small-binary-sfa-lz4",
+      "elapsed_ms": 11,
+      "exit_status": 0,
+      "stdout": "Unpack Summary\ncodec: Lz4\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 17\nbundle_count: 1\nraw_bytes: 344064\nencoded_bytes: 4886\nduration_seconds: 0.0050\nfiles_per_second: 3400.00\nmib_per_second: 65.62\n",
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "small-binary",
+      "baseline": "sfa",
+      "codec": "zstd",
+      "phase": "pack",
+      "command": "target/release/sfa-cli pack tests/fixtures/datasets/small-binary/input tests/fixtures/datasets/small-binary/output/small-binary.zstd.sfa --codec zstd",
+      "elapsed_ms": 9,
+      "exit_status": 0,
+      "stdout": "Pack Summary\ncodec: Zstd\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 17\nbundle_count: 1\nraw_bytes: 344064\nencoded_bytes: 3575\nduration_seconds: 0.0040\nfiles_per_second: 4250.00\nmib_per_second: 82.03\n",
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "small-binary",
+      "baseline": "sfa",
+      "codec": "zstd",
+      "phase": "unpack",
+      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/small-binary/output/small-binary.zstd.sfa -C tests/fixtures/datasets/small-binary/output/unpack-small-binary-sfa-zstd",
+      "elapsed_ms": 9,
+      "exit_status": 0,
+      "stdout": "Unpack Summary\ncodec: Zstd\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 17\nbundle_count: 1\nraw_bytes: 344064\nencoded_bytes: 3575\nduration_seconds: 0.0050\nfiles_per_second: 3400.00\nmib_per_second: 65.62\n",
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "small-binary",
+      "baseline": "tar",
+      "codec": "lz4",
+      "phase": "pack",
+      "command": "sh -c 'set -eu; \"$1\" -cf - -C \"$2\" . | \"$3\" -q -f - \"$4\"' sh /usr/bin/tar tests/fixtures/datasets/small-binary/input /opt/homebrew/bin/lz4 tests/fixtures/datasets/small-binary/output/small-binary.tar.lz4",
+      "elapsed_ms": 87,
+      "exit_status": 0,
+      "stdout": null,
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "small-binary",
+      "baseline": "tar",
+      "codec": "lz4",
+      "phase": "unpack",
+      "command": "sh -c 'set -eu; \"$1\" -q -d -c \"$2\" | \"$3\" -xf - -C \"$4\"' sh /opt/homebrew/bin/lz4 tests/fixtures/datasets/small-binary/output/small-binary.tar.lz4 /usr/bin/tar tests/fixtures/datasets/small-binary/output/unpack-small-binary-tar-lz4",
+      "elapsed_ms": 100,
+      "exit_status": 0,
+      "stdout": null,
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "small-binary",
+      "baseline": "tar",
+      "codec": "zstd",
+      "phase": "pack",
+      "command": "sh -c 'set -eu; \"$1\" -cf - -C \"$2\" . | \"$3\" -q -f -o \"$4\"' sh /usr/bin/tar tests/fixtures/datasets/small-binary/input /opt/homebrew/bin/zstd tests/fixtures/datasets/small-binary/output/small-binary.tar.zstd",
+      "elapsed_ms": 46,
+      "exit_status": 0,
+      "stdout": null,
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "small-binary",
+      "baseline": "tar",
+      "codec": "zstd",
+      "phase": "unpack",
+      "command": "sh -c 'set -eu; \"$1\" -q -d -c \"$2\" | \"$3\" -xf - -C \"$4\"' sh /opt/homebrew/bin/zstd tests/fixtures/datasets/small-binary/output/small-binary.tar.zstd /usr/bin/tar tests/fixtures/datasets/small-binary/output/unpack-small-binary-tar-zstd",
+      "elapsed_ms": 58,
+      "exit_status": 0,
+      "stdout": null,
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "large-control",
+      "baseline": "sfa",
+      "codec": "lz4",
+      "phase": "pack",
+      "command": "target/release/sfa-cli pack tests/fixtures/datasets/large-control/input tests/fixtures/datasets/large-control/output/large-control.lz4.sfa --codec lz4",
+      "elapsed_ms": 14,
+      "exit_status": 0,
+      "stdout": "Pack Summary\ncodec: Lz4\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 5\nbundle_count: 3\nraw_bytes: 4740516\nencoded_bytes: 839072\nduration_seconds: 0.0070\nfiles_per_second: 714.29\nmib_per_second: 645.84\n",
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "large-control",
+      "baseline": "sfa",
+      "codec": "lz4",
+      "phase": "unpack",
+      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/large-control/output/large-control.lz4.sfa -C tests/fixtures/datasets/large-control/output/unpack-large-control-sfa-lz4",
+      "elapsed_ms": 10,
+      "exit_status": 0,
+      "stdout": "Unpack Summary\ncodec: Lz4\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 5\nbundle_count: 3\nraw_bytes: 4740516\nencoded_bytes: 839072\nduration_seconds: 0.0050\nfiles_per_second: 1000.00\nmib_per_second: 904.18\n",
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "large-control",
+      "baseline": "sfa",
+      "codec": "zstd",
+      "phase": "pack",
+      "command": "target/release/sfa-cli pack tests/fixtures/datasets/large-control/input tests/fixtures/datasets/large-control/output/large-control.zstd.sfa --codec zstd",
+      "elapsed_ms": 19,
+      "exit_status": 0,
+      "stdout": "Pack Summary\ncodec: Zstd\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 5\nbundle_count: 3\nraw_bytes: 4740516\nencoded_bytes: 223714\nduration_seconds: 0.0060\nfiles_per_second: 833.33\nmib_per_second: 753.48\n",
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "large-control",
+      "baseline": "sfa",
+      "codec": "zstd",
+      "phase": "unpack",
+      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/large-control/output/large-control.zstd.sfa -C tests/fixtures/datasets/large-control/output/unpack-large-control-sfa-zstd",
+      "elapsed_ms": 27,
+      "exit_status": 0,
+      "stdout": "Unpack Summary\ncodec: Zstd\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 5\nbundle_count: 3\nraw_bytes: 4740516\nencoded_bytes: 223714\nduration_seconds: 0.0160\nfiles_per_second: 312.50\nmib_per_second: 282.56\n",
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "large-control",
+      "baseline": "tar",
+      "codec": "lz4",
+      "phase": "pack",
+      "command": "sh -c 'set -eu; \"$1\" -cf - -C \"$2\" . | \"$3\" -q -f - \"$4\"' sh /usr/bin/tar tests/fixtures/datasets/large-control/input /opt/homebrew/bin/lz4 tests/fixtures/datasets/large-control/output/large-control.tar.lz4",
+      "elapsed_ms": 97,
+      "exit_status": 0,
+      "stdout": null,
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "large-control",
+      "baseline": "tar",
+      "codec": "lz4",
+      "phase": "unpack",
+      "command": "sh -c 'set -eu; \"$1\" -q -d -c \"$2\" | \"$3\" -xf - -C \"$4\"' sh /opt/homebrew/bin/lz4 tests/fixtures/datasets/large-control/output/large-control.tar.lz4 /usr/bin/tar tests/fixtures/datasets/large-control/output/unpack-large-control-tar-lz4",
+      "elapsed_ms": 111,
+      "exit_status": 0,
+      "stdout": null,
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "large-control",
+      "baseline": "tar",
+      "codec": "zstd",
+      "phase": "pack",
+      "command": "sh -c 'set -eu; \"$1\" -cf - -C \"$2\" . | \"$3\" -q -f -o \"$4\"' sh /usr/bin/tar tests/fixtures/datasets/large-control/input /opt/homebrew/bin/zstd tests/fixtures/datasets/large-control/output/large-control.tar.zstd",
+      "elapsed_ms": 67,
+      "exit_status": 0,
+      "stdout": null,
+      "stderr": null,
+      "notes": null
+    },
+    {
+      "dataset": "large-control",
+      "baseline": "tar",
+      "codec": "zstd",
+      "phase": "unpack",
+      "command": "sh -c 'set -eu; \"$1\" -q -d -c \"$2\" | \"$3\" -xf - -C \"$4\"' sh /opt/homebrew/bin/zstd tests/fixtures/datasets/large-control/output/large-control.tar.zstd /usr/bin/tar tests/fixtures/datasets/large-control/output/unpack-large-control-tar-zstd",
+      "elapsed_ms": 34,
+      "exit_status": 0,
+      "stdout": null,
+      "stderr": null,
+      "notes": null
+    }
+  ]
+}

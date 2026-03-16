@@ -1,0 +1,4 @@
+profile = "prod"
+threads = 12
+codec = "zstd"
+integrity = "strong"

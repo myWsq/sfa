@@ -1,0 +1,4 @@
+step,description,owner
+1,build release binary,release-manager
+2,run benchmark baseline,maintainer
+3,review results,team

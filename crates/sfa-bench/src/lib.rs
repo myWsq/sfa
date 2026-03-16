@@ -4,7 +4,11 @@ pub mod runner;
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+    use std::path::PathBuf;
+
     use crate::harness::{Codec, default_cases, default_matrix};
+    use crate::report::BenchmarkSuiteReport;
 
     #[test]
     fn matrix_contains_tar_and_sfa_for_each_dataset() {
@@ -13,5 +17,46 @@ mod tests {
         assert_eq!(matrix.len(), cases.len() * 2 * 2);
         assert!(matrix.iter().any(|job| job.codec == Codec::Lz4));
         assert!(matrix.iter().any(|job| job.codec == Codec::Zstd));
+    }
+
+    #[test]
+    fn committed_baseline_report_matches_current_matrix() {
+        let report_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../benches/results/baseline-v0.1.0.json");
+        let report: BenchmarkSuiteReport = serde_json::from_slice(
+            &std::fs::read(&report_path).expect("committed benchmark baseline should exist"),
+        )
+        .expect("committed benchmark baseline should parse");
+
+        let expected: BTreeSet<_> = default_matrix()
+            .into_iter()
+            .flat_map(|job| {
+                ["pack", "unpack"].into_iter().map(move |phase| {
+                    (
+                        job.case.name.clone(),
+                        job.baseline,
+                        job.codec,
+                        phase.to_string(),
+                    )
+                })
+            })
+            .collect();
+
+        let actual: BTreeSet<_> = report
+            .records
+            .iter()
+            .map(|record| {
+                (
+                    record.dataset.clone(),
+                    record.baseline,
+                    record.codec,
+                    record.phase.clone(),
+                )
+            })
+            .collect();
+
+        assert_eq!(actual, expected);
+        assert!(report.environment.tar.path.is_some());
+        assert_eq!(report.datasets.len(), default_cases().len());
     }
 }

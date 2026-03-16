@@ -1,0 +1,4 @@
+route,requests,errors,p95_ms
+/home,18210,12,17
+/api/upload,2410,3,53
+/api/report,915,1,44
