@@ -1,5 +1,7 @@
-
 # 04. SFA v1 数据协议设计
+
+> Note
+> `spec/format-v1.md` is now the authoritative frozen protocol definition for SFA v1. This document remains the design-background version of the same topic and may include context that is intentionally omitted from the normative spec.
 
 ## 1. 设计目标
 
@@ -506,4 +508,3 @@ SFA v1 的协议核心是：
 > **把目录结构信息前置，把数据体切成独立自描述 frame，并用 manifest 连接“文件世界”和“bundle 世界”。**
 
 这是实现高吞吐、流式与并行三者兼得的关键。
-

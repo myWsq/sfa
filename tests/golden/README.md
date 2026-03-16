@@ -1,11 +1,9 @@
 # Golden Fixtures
 
-Use this folder for canonical archives and expected metadata dumps.
+Protocol fixture assets live under [tests/fixtures/golden](/Users/bytedance/github/sfa/tests/fixtures/golden).
 
-Suggested structure:
+Current canonical fixture set:
 
-- `archives/*.sfa`: frozen protocol examples
-- `manifests/*.json`: decoded manifest snapshots
-- `roundtrip/*`: expected output trees
+- `small-tree-lz4-strong`: a small aggregated tree with nested directories, an empty file, and a symlink, packed with `lz4` data frames and `strong` integrity.
 
-Initial placeholder files live under `tests/fixtures/golden`.
+These fixtures are consumed by `tests/scripts/run_protocol_smoke.sh` and anchor the frozen SFA v1 wire format.
