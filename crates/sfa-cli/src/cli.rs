@@ -47,6 +47,9 @@ pub struct PackArgs {
     /// Parse and summarize only; do not execute archival backend.
     #[arg(long, default_value_t = false)]
     pub dry_run: bool,
+    /// Output format for command statistics.
+    #[arg(long, value_enum, default_value_t = StatsFormat::Human)]
+    pub stats_format: StatsFormat,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -71,26 +74,47 @@ pub struct UnpackArgs {
     /// Parse and summarize only; do not execute unpack backend.
     #[arg(long, default_value_t = false)]
     pub dry_run: bool,
+    /// Output format for command statistics.
+    #[arg(long, value_enum, default_value_t = StatsFormat::Human)]
+    pub stats_format: StatsFormat,
 }
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, ValueEnum, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DataCodec {
     Lz4,
     Zstd,
 }
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
+impl DataCodec {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Lz4 => "lz4",
+            Self::Zstd => "zstd",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum IntegrityMode {
     Off,
     Fast,
     Strong,
 }
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, ValueEnum, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum RestoreOwnerPolicy {
     Auto,
     Preserve,
     Never,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum StatsFormat {
+    Human,
+    Json,
 }
 
 fn default_threads() -> usize {

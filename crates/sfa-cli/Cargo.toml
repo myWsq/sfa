@@ -8,6 +8,8 @@ description = "CLI for SFA pack/unpack workflows"
 
 [dependencies]
 clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 sfa-core = { path = "../sfa-core" }
 sfa-unixfs = { path = "../sfa-unixfs" }
 walkdir.workspace = true

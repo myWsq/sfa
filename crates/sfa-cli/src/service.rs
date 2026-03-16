@@ -1,13 +1,13 @@
 use std::fs;
 use std::fs::File;
 use std::path::Path;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use sfa_core::format::read_header;
 use sfa_core::{
     DataCodec as CoreDataCodec, IntegrityMode as CoreIntegrityMode,
-    OverwritePolicy as CoreOverwritePolicy, PackConfig,
-    RestoreOwnerPolicy as CoreRestoreOwnerPolicy, UnpackConfig,
+    OverwritePolicy as CoreOverwritePolicy, PackConfig, PackPhaseBreakdown, PackStats,
+    RestoreOwnerPolicy as CoreRestoreOwnerPolicy, UnpackConfig, UnpackPhaseBreakdown, UnpackStats,
 };
 use sfa_unixfs::UnixFsError;
 use walkdir::WalkDir;
@@ -39,29 +39,16 @@ pub struct UnpackRequest {
     pub dry_run: bool,
 }
 
-#[derive(Debug, Clone)]
-pub struct RunStats {
-    pub codec: DataCodec,
-    pub threads: usize,
-    pub bundle_target_bytes: u32,
-    pub small_file_threshold: u32,
-    pub entry_count: u64,
-    pub bundle_count: u64,
-    pub raw_bytes: u64,
-    pub encoded_bytes: u64,
-    pub duration: Duration,
-}
-
 pub trait ArchiveService {
-    fn pack(&self, req: PackRequest) -> Result<RunStats, CliError>;
-    fn unpack(&self, req: UnpackRequest) -> Result<RunStats, CliError>;
+    fn pack(&self, req: PackRequest) -> Result<PackStats, CliError>;
+    fn unpack(&self, req: UnpackRequest) -> Result<UnpackStats, CliError>;
 }
 
 #[derive(Default)]
 pub struct RealArchiveService;
 
 impl ArchiveService for RealArchiveService {
-    fn pack(&self, req: PackRequest) -> Result<RunStats, CliError> {
+    fn pack(&self, req: PackRequest) -> Result<PackStats, CliError> {
         if !req.input_dir.is_dir() {
             return Err(CliError::io(format!(
                 "input directory does not exist: {}",
@@ -81,22 +68,12 @@ impl ArchiveService for RealArchiveService {
             };
             let stats = sfa_unixfs::pack_directory(&req.input_dir, &req.output_archive, &config)
                 .map_err(map_unixfs_error)?;
-            return Ok(RunStats {
-                codec: req.codec,
-                threads: stats.threads,
-                bundle_target_bytes: stats.bundle_target_bytes,
-                small_file_threshold: stats.small_file_threshold,
-                entry_count: stats.entry_count,
-                bundle_count: stats.bundle_count,
-                raw_bytes: stats.raw_bytes,
-                encoded_bytes: stats.encoded_bytes,
-                duration: Duration::from_millis(stats.duration_ms as u64),
-            });
+            return Ok(stats);
         }
         let start = Instant::now();
         let fs_stats = collect_dir_stats(&req.input_dir)?;
-        Ok(RunStats {
-            codec: req.codec,
+        Ok(PackStats {
+            codec: req.codec.as_str().to_string(),
             threads: req.threads,
             bundle_target_bytes: req.bundle_target_bytes,
             small_file_threshold: req.small_file_threshold,
@@ -104,11 +81,14 @@ impl ArchiveService for RealArchiveService {
             bundle_count: estimate_bundle_count(fs_stats.raw_bytes, req.bundle_target_bytes),
             raw_bytes: fs_stats.raw_bytes,
             encoded_bytes: estimate_encoded_size(fs_stats.raw_bytes, req.codec),
-            duration: start.elapsed(),
+            duration_ms: elapsed_ms(start.elapsed()),
+            phase_breakdown: PackPhaseBreakdown::unavailable(
+                "dry-run does not measure execution phases",
+            ),
         })
     }
 
-    fn unpack(&self, req: UnpackRequest) -> Result<RunStats, CliError> {
+    fn unpack(&self, req: UnpackRequest) -> Result<UnpackStats, CliError> {
         if !req.input_archive.is_file() {
             return Err(CliError::io(format!(
                 "input archive does not exist: {}",
@@ -133,17 +113,7 @@ impl ArchiveService for RealArchiveService {
             };
             let stats = sfa_unixfs::unpack_archive(&req.input_archive, &req.output_dir, &config)
                 .map_err(map_unixfs_error)?;
-            return Ok(RunStats {
-                codec: parse_codec_name(&stats.codec)?,
-                threads: stats.threads,
-                bundle_target_bytes: 4 * 1024 * 1024,
-                small_file_threshold: 256 * 1024,
-                entry_count: stats.entry_count,
-                bundle_count: stats.bundle_count,
-                raw_bytes: stats.raw_bytes,
-                encoded_bytes: stats.encoded_bytes,
-                duration: Duration::from_millis(stats.duration_ms as u64),
-            });
+            return Ok(stats);
         }
         let start = Instant::now();
         let archive_size = fs::metadata(&req.input_archive)
@@ -155,16 +125,17 @@ impl ArchiveService for RealArchiveService {
                 .unwrap_or(1)
         });
         let codec = infer_archive_codec(&req.input_archive).unwrap_or(DataCodec::Lz4);
-        Ok(RunStats {
-            codec,
+        Ok(UnpackStats {
+            codec: codec.as_str().to_string(),
             threads,
-            bundle_target_bytes: 4 * 1024 * 1024,
-            small_file_threshold: 256 * 1024,
             entry_count: 0,
             bundle_count: estimate_bundle_count(archive_size, 4 * 1024 * 1024),
             raw_bytes: archive_size,
             encoded_bytes: archive_size,
-            duration: start.elapsed(),
+            duration_ms: elapsed_ms(start.elapsed()),
+            phase_breakdown: UnpackPhaseBreakdown::unavailable(
+                "dry-run does not measure execution phases",
+            ),
         })
     }
 }
@@ -173,16 +144,6 @@ fn map_codec(codec: DataCodec) -> CoreDataCodec {
     match codec {
         DataCodec::Lz4 => CoreDataCodec::Lz4,
         DataCodec::Zstd => CoreDataCodec::Zstd,
-    }
-}
-
-fn parse_codec_name(value: &str) -> Result<DataCodec, CliError> {
-    match value {
-        "lz4" => Ok(DataCodec::Lz4),
-        "zstd" => Ok(DataCodec::Zstd),
-        other => Err(CliError::internal(format!(
-            "unknown codec in stats: {other}"
-        ))),
     }
 }
 
@@ -273,4 +234,8 @@ fn estimate_encoded_size(raw_bytes: u64, codec: DataCodec) -> u64 {
         DataCodec::Lz4 => (raw_bytes as f64 * 0.72) as u64,
         DataCodec::Zstd => (raw_bytes as f64 * 0.58) as u64,
     }
+}
+
+fn elapsed_ms(duration: std::time::Duration) -> u64 {
+    duration.as_millis().min(u128::from(u64::MAX)) as u64
 }

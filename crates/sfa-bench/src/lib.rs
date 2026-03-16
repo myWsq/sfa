@@ -8,7 +8,7 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::harness::{Codec, default_cases, default_matrix};
-    use crate::report::BenchmarkSuiteReport;
+    use crate::report::{BenchmarkSuiteReport, SfaCommandStats};
 
     #[test]
     fn matrix_contains_tar_and_sfa_for_each_dataset() {
@@ -58,5 +58,19 @@ mod tests {
         assert_eq!(actual, expected);
         assert!(report.environment.tar.path.is_some());
         assert_eq!(report.datasets.len(), default_cases().len());
+        assert!(report.environment.resource_sampler.supported);
+        assert!(
+            report
+                .records
+                .iter()
+                .all(|record| record.resource_observation.is_some())
+        );
+        assert!(report.records.iter().all(|record| match record.baseline {
+            crate::harness::Baseline::Sfa => matches!(
+                record.sfa_stats,
+                Some(SfaCommandStats::Pack(_)) | Some(SfaCommandStats::Unpack(_))
+            ),
+            crate::harness::Baseline::Tar => record.sfa_stats.is_none(),
+        }));
     }
 }

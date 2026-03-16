@@ -1,20 +1,57 @@
-use crate::service::RunStats;
+use sfa_core::{PackStats, UnpackStats};
 
-pub fn render_pack_summary(stats: &RunStats) -> String {
-    format_summary("Pack Summary", stats)
+pub fn render_pack_summary(stats: &PackStats) -> String {
+    format_summary(
+        "Pack Summary",
+        &stats.codec,
+        stats.threads,
+        stats.bundle_target_bytes,
+        stats.small_file_threshold,
+        stats.entry_count,
+        stats.bundle_count,
+        stats.raw_bytes,
+        stats.encoded_bytes,
+        stats.duration_ms,
+        stats.files_per_second(),
+        stats.mib_per_second(),
+    )
 }
 
-pub fn render_unpack_summary(stats: &RunStats) -> String {
-    format_summary("Unpack Summary", stats)
+pub fn render_unpack_summary(stats: &UnpackStats) -> String {
+    format_summary(
+        "Unpack Summary",
+        &stats.codec,
+        stats.threads,
+        4 * 1024 * 1024,
+        256 * 1024,
+        stats.entry_count,
+        stats.bundle_count,
+        stats.raw_bytes,
+        stats.encoded_bytes,
+        stats.duration_ms,
+        stats.files_per_second(),
+        stats.mib_per_second(),
+    )
 }
 
-fn format_summary(title: &str, stats: &RunStats) -> String {
-    let secs = stats.duration.as_secs_f64().max(0.000_001);
-    let files_per_sec = stats.entry_count as f64 / secs;
-    let mib_per_sec = (stats.raw_bytes as f64 / 1024.0 / 1024.0) / secs;
+fn format_summary(
+    title: &str,
+    codec: &str,
+    threads: usize,
+    bundle_target_bytes: u32,
+    small_file_threshold: u32,
+    entry_count: u64,
+    bundle_count: u64,
+    raw_bytes: u64,
+    encoded_bytes: u64,
+    duration_ms: u64,
+    files_per_second: f64,
+    mib_per_second: f64,
+) -> String {
+    let secs = (duration_ms as f64 / 1000.0).max(0.000_001);
     format!(
         "{title}\n\
-         codec: {:?}\n\
+         codec: {codec}\n\
          threads: {}\n\
          bundle_target_bytes: {}\n\
          small_file_threshold: {}\n\
@@ -25,32 +62,28 @@ fn format_summary(title: &str, stats: &RunStats) -> String {
          duration_seconds: {:.4}\n\
          files_per_second: {:.2}\n\
          mib_per_second: {:.2}",
-        stats.codec,
-        stats.threads,
-        stats.bundle_target_bytes,
-        stats.small_file_threshold,
-        stats.entry_count,
-        stats.bundle_count,
-        stats.raw_bytes,
-        stats.encoded_bytes,
+        threads,
+        bundle_target_bytes,
+        small_file_threshold,
+        entry_count,
+        bundle_count,
+        raw_bytes,
+        encoded_bytes,
         secs,
-        files_per_sec,
-        mib_per_sec,
+        files_per_second,
+        mib_per_second,
     )
 }
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use super::render_pack_summary;
-    use crate::cli::DataCodec;
-    use crate::service::RunStats;
+    use sfa_core::{PackPhaseBreakdown, PackStats};
 
     #[test]
     fn summary_contains_throughput_keys() {
-        let stats = RunStats {
-            codec: DataCodec::Lz4,
+        let stats = PackStats {
+            codec: "lz4".to_string(),
             threads: 8,
             bundle_target_bytes: 4 * 1024 * 1024,
             small_file_threshold: 256 * 1024,
@@ -58,7 +91,8 @@ mod tests {
             bundle_count: 5,
             raw_bytes: 1_048_576,
             encoded_bytes: 700_000,
-            duration: Duration::from_secs(2),
+            duration_ms: 2_000,
+            phase_breakdown: PackPhaseBreakdown::default(),
         };
         let rendered = render_pack_summary(&stats);
         assert!(rendered.contains("files_per_second"));

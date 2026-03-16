@@ -14,7 +14,10 @@ use sfa_core::config::{FrameHashAlgo, PackConfig, RestoreOwnerPolicy, UnpackConf
 use sfa_core::format::{FeatureFlags, TrailerV1};
 use sfa_core::integrity::{frame_hash, trailer_hash};
 use sfa_core::model::{EntryKind as CoreEntryKind, PlannerInputEntry};
-use sfa_core::{EncodedFrame, FrameHeaderV1, PackStats, UnpackStats, plan_archive};
+use sfa_core::{
+    EncodedFrame, FrameHeaderV1, ObservedMetric, PackPhaseBreakdown, PackStats,
+    UnpackPhaseBreakdown, UnpackStats, plan_archive,
+};
 
 use crate::error::UnixFsError;
 use crate::path::ensure_safe_relative_path;
@@ -27,7 +30,11 @@ pub fn pack_directory(
     config: &PackConfig,
 ) -> Result<PackStats, UnixFsError> {
     let started = Instant::now();
+    let scan_started = Instant::now();
     let scan = scan_tree(input_dir)?;
+    let scan_ms = elapsed_ms(scan_started.elapsed());
+
+    let plan_started = Instant::now();
     let entries = scan
         .entries
         .iter()
@@ -39,7 +46,9 @@ pub fn pack_directory(
         config.small_file_threshold,
     )?;
     let prepared = prepare_archive(planned.manifest.clone(), config)?;
+    let plan_ms = elapsed_ms(plan_started.elapsed());
 
+    let encode_started = Instant::now();
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(config.threads.max(1))
         .build()
@@ -51,12 +60,15 @@ pub fn pack_directory(
             .map(|bundle| encode_bundle(bundle, config))
             .collect::<Result<Vec<_>, _>>()
     })?;
+    let encode_ms = elapsed_ms(encode_started.elapsed());
 
+    let write_started = Instant::now();
     if let Some(parent) = output_archive.parent() {
         fs::create_dir_all(parent)?;
     }
     let mut writer = File::create(output_archive)?;
     let trailer = write_archive(&mut writer, &prepared, frames.clone(), config.integrity)?;
+    let write_ms = elapsed_ms(write_started.elapsed());
 
     let raw_bytes = planned
         .bundles
@@ -87,6 +99,12 @@ pub fn pack_directory(
             raw_bytes,
             encoded_bytes: encoded_frame_bytes + archive_overhead,
             duration_ms: 0,
+            phase_breakdown: PackPhaseBreakdown {
+                scan_ms: ObservedMetric::measured(scan_ms),
+                plan_ms: ObservedMetric::measured(plan_ms),
+                encode_ms: ObservedMetric::measured(encode_ms),
+                write_ms: ObservedMetric::measured(write_ms),
+            },
         },
     ))
 }
@@ -97,16 +115,19 @@ pub fn unpack_archive(
     config: &UnpackConfig,
 ) -> Result<UnpackStats, UnixFsError> {
     let started = Instant::now();
+    let header_started = Instant::now();
     fs::create_dir_all(output_dir)?;
     let archive_len = fs::metadata(input_archive)?.len();
     let reader = File::open(input_archive)?;
     let mut archive = ArchiveReader::new(reader);
     let header = archive.read_header()?;
+    let header_ms = elapsed_ms(header_started.elapsed());
+
+    let manifest_started = Instant::now();
     let manifest = archive.read_manifest()?;
     let threads = config
         .threads
         .unwrap_or_else(|| usize::from(header.suggested_parallelism.max(1)));
-
     let restore_targets = build_restore_targets(&manifest)?;
     let mut restorer = LocalRestorer::new(
         output_dir.to_path_buf(),
@@ -121,7 +142,9 @@ pub fn unpack_archive(
             ..RestorePolicy::default()
         },
     );
+    let manifest_ms = elapsed_ms(manifest_started.elapsed());
 
+    let decode_started = Instant::now();
     for (entry_id, entry) in manifest.entries.iter().enumerate() {
         if matches!(entry.kind, CoreEntryKind::Directory) {
             restorer.create_dir(&restore_targets[entry_id])?;
@@ -160,7 +183,9 @@ pub fn unpack_archive(
             }
         }
     }
+    let decode_and_scatter_ms = elapsed_ms(decode_started.elapsed());
 
+    let restore_started = Instant::now();
     for (entry_id, entry) in manifest.entries.iter().enumerate() {
         if matches!(entry.kind, CoreEntryKind::Regular) && entry.size > 0 {
             restorer.finalize_entry(&restore_targets[entry_id])?;
@@ -198,6 +223,7 @@ pub fn unpack_archive(
             &trailer_input,
         )?;
     }
+    let restore_finalize_ms = elapsed_ms(restore_started.elapsed());
 
     Ok(UnpackStats::from_duration(
         started.elapsed(),
@@ -209,6 +235,12 @@ pub fn unpack_archive(
             raw_bytes: total_raw_bytes,
             encoded_bytes: archive_len,
             duration_ms: 0,
+            phase_breakdown: UnpackPhaseBreakdown {
+                header_ms: ObservedMetric::measured(header_ms),
+                manifest_ms: ObservedMetric::measured(manifest_ms),
+                decode_and_scatter_ms: ObservedMetric::measured(decode_and_scatter_ms),
+                restore_finalize_ms: ObservedMetric::measured(restore_finalize_ms),
+            },
         },
     ))
 }
@@ -347,6 +379,10 @@ fn verify_trailer(
         return Err(sfa_core::Error::TrailerHashMismatch.into());
     }
     Ok(())
+}
+
+fn elapsed_ms(duration: std::time::Duration) -> u64 {
+    duration.as_millis().min(u128::from(u64::MAX)) as u64
 }
 
 fn apply_file_times(target: &RestoreTarget, output_dir: &Path) -> Result<(), UnixFsError> {

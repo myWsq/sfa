@@ -1,5 +1,5 @@
 {
-  "generated_at_unix_s": 1773664174,
+  "generated_at_unix_s": 1773666160,
   "invocation": "target/debug/tar_vs_sfa --sfa-bin target/release/sfa-cli --output benches/results/baseline-v0.1.0.json",
   "dry_run": false,
   "environment": {
@@ -32,7 +32,12 @@
           "version": "*** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***"
         }
       }
-    ]
+    ],
+    "resource_sampler": {
+      "name": "wait4/getrusage",
+      "supported": true,
+      "note": "max_rss_kib is normalized from host-specific ru_maxrss units"
+    }
   },
   "datasets": [
     {
@@ -66,48 +71,188 @@
       "baseline": "sfa",
       "codec": "lz4",
       "phase": "pack",
-      "command": "target/release/sfa-cli pack tests/fixtures/datasets/small-text/input tests/fixtures/datasets/small-text/output/small-text.lz4.sfa --codec lz4",
-      "elapsed_ms": 15,
+      "command": "target/release/sfa-cli pack tests/fixtures/datasets/small-text/input tests/fixtures/datasets/small-text/output/small-text.lz4.sfa --codec lz4 --stats-format json",
+      "elapsed_ms": 32,
       "exit_status": 0,
-      "stdout": "Pack Summary\ncodec: Lz4\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 32\nbundle_count: 1\nraw_bytes: 30745\nencoded_bytes: 5847\nduration_seconds: 0.0090\nfiles_per_second: 3555.56\nmib_per_second: 3.26\n",
+      "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "sfa_stats": {
+        "type": "pack",
+        "codec": "lz4",
+        "threads": 10,
+        "bundle_target_bytes": 4194304,
+        "small_file_threshold": 262144,
+        "entry_count": 32,
+        "bundle_count": 1,
+        "raw_bytes": 30745,
+        "encoded_bytes": 5847,
+        "duration_ms": 19,
+        "phase_breakdown": {
+          "scan_ms": {
+            "status": "measured",
+            "value": 6
+          },
+          "plan_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "encode_ms": {
+            "status": "measured",
+            "value": 12
+          },
+          "write_ms": {
+            "status": "measured",
+            "value": 0
+          }
+        }
+      },
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 2,
+        "system_cpu_ms": 6,
+        "max_rss_kib": 2912
+      }
     },
     {
       "dataset": "small-text",
       "baseline": "sfa",
       "codec": "lz4",
       "phase": "unpack",
-      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/small-text/output/small-text.lz4.sfa -C tests/fixtures/datasets/small-text/output/unpack-small-text-sfa-lz4",
-      "elapsed_ms": 30,
+      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/small-text/output/small-text.lz4.sfa -C tests/fixtures/datasets/small-text/output/unpack-small-text-sfa-lz4 --stats-format json",
+      "elapsed_ms": 22,
       "exit_status": 0,
-      "stdout": "Unpack Summary\ncodec: Lz4\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 32\nbundle_count: 1\nraw_bytes: 30745\nencoded_bytes: 5847\nduration_seconds: 0.0190\nfiles_per_second: 1684.21\nmib_per_second: 1.54\n",
+      "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "sfa_stats": {
+        "type": "unpack",
+        "codec": "lz4",
+        "threads": 10,
+        "entry_count": 32,
+        "bundle_count": 1,
+        "raw_bytes": 30745,
+        "encoded_bytes": 5847,
+        "duration_ms": 10,
+        "phase_breakdown": {
+          "header_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "manifest_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "decode_and_scatter_ms": {
+            "status": "measured",
+            "value": 8
+          },
+          "restore_finalize_ms": {
+            "status": "measured",
+            "value": 1
+          }
+        }
+      },
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 1,
+        "system_cpu_ms": 6,
+        "max_rss_kib": 2096
+      }
     },
     {
       "dataset": "small-text",
       "baseline": "sfa",
       "codec": "zstd",
       "phase": "pack",
-      "command": "target/release/sfa-cli pack tests/fixtures/datasets/small-text/input tests/fixtures/datasets/small-text/output/small-text.zstd.sfa --codec zstd",
-      "elapsed_ms": 34,
+      "command": "target/release/sfa-cli pack tests/fixtures/datasets/small-text/input tests/fixtures/datasets/small-text/output/small-text.zstd.sfa --codec zstd --stats-format json",
+      "elapsed_ms": 12,
       "exit_status": 0,
-      "stdout": "Pack Summary\ncodec: Zstd\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 32\nbundle_count: 1\nraw_bytes: 30745\nencoded_bytes: 2788\nduration_seconds: 0.0230\nfiles_per_second: 1391.30\nmib_per_second: 1.27\n",
+      "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "sfa_stats": {
+        "type": "pack",
+        "codec": "zstd",
+        "threads": 10,
+        "bundle_target_bytes": 4194304,
+        "small_file_threshold": 262144,
+        "entry_count": 32,
+        "bundle_count": 1,
+        "raw_bytes": 30745,
+        "encoded_bytes": 2788,
+        "duration_ms": 7,
+        "phase_breakdown": {
+          "scan_ms": {
+            "status": "measured",
+            "value": 2
+          },
+          "plan_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "encode_ms": {
+            "status": "measured",
+            "value": 3
+          },
+          "write_ms": {
+            "status": "measured",
+            "value": 0
+          }
+        }
+      },
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 1,
+        "system_cpu_ms": 4,
+        "max_rss_kib": 3344
+      }
     },
     {
       "dataset": "small-text",
       "baseline": "sfa",
       "codec": "zstd",
       "phase": "unpack",
-      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/small-text/output/small-text.zstd.sfa -C tests/fixtures/datasets/small-text/output/unpack-small-text-sfa-zstd",
-      "elapsed_ms": 24,
+      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/small-text/output/small-text.zstd.sfa -C tests/fixtures/datasets/small-text/output/unpack-small-text-sfa-zstd --stats-format json",
+      "elapsed_ms": 21,
       "exit_status": 0,
-      "stdout": "Unpack Summary\ncodec: Zstd\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 32\nbundle_count: 1\nraw_bytes: 30745\nencoded_bytes: 2788\nduration_seconds: 0.0120\nfiles_per_second: 2666.67\nmib_per_second: 2.44\n",
+      "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "sfa_stats": {
+        "type": "unpack",
+        "codec": "zstd",
+        "threads": 10,
+        "entry_count": 32,
+        "bundle_count": 1,
+        "raw_bytes": 30745,
+        "encoded_bytes": 2788,
+        "duration_ms": 16,
+        "phase_breakdown": {
+          "header_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "manifest_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "decode_and_scatter_ms": {
+            "status": "measured",
+            "value": 14
+          },
+          "restore_finalize_ms": {
+            "status": "measured",
+            "value": 1
+          }
+        }
+      },
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 1,
+        "system_cpu_ms": 5,
+        "max_rss_kib": 2224
+      }
     },
     {
       "dataset": "small-text",
@@ -115,11 +260,17 @@
       "codec": "lz4",
       "phase": "pack",
       "command": "sh -c 'set -eu; \"$1\" -cf - -C \"$2\" . | \"$3\" -q -f - \"$4\"' sh /usr/bin/tar tests/fixtures/datasets/small-text/input /opt/homebrew/bin/lz4 tests/fixtures/datasets/small-text/output/small-text.tar.lz4",
-      "elapsed_ms": 92,
+      "elapsed_ms": 125,
       "exit_status": 0,
       "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 4,
+        "system_cpu_ms": 33,
+        "max_rss_kib": 3856
+      }
     },
     {
       "dataset": "small-text",
@@ -127,11 +278,17 @@
       "codec": "lz4",
       "phase": "unpack",
       "command": "sh -c 'set -eu; \"$1\" -q -d -c \"$2\" | \"$3\" -xf - -C \"$4\"' sh /opt/homebrew/bin/lz4 tests/fixtures/datasets/small-text/output/small-text.tar.lz4 /usr/bin/tar tests/fixtures/datasets/small-text/output/unpack-small-text-tar-lz4",
-      "elapsed_ms": 113,
+      "elapsed_ms": 161,
       "exit_status": 0,
       "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 4,
+        "system_cpu_ms": 35,
+        "max_rss_kib": 3760
+      }
     },
     {
       "dataset": "small-text",
@@ -139,11 +296,17 @@
       "codec": "zstd",
       "phase": "pack",
       "command": "sh -c 'set -eu; \"$1\" -cf - -C \"$2\" . | \"$3\" -q -f -o \"$4\"' sh /usr/bin/tar tests/fixtures/datasets/small-text/input /opt/homebrew/bin/zstd tests/fixtures/datasets/small-text/output/small-text.tar.zstd",
-      "elapsed_ms": 83,
+      "elapsed_ms": 76,
       "exit_status": 0,
       "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 5,
+        "system_cpu_ms": 35,
+        "max_rss_kib": 4720
+      }
     },
     {
       "dataset": "small-text",
@@ -151,59 +314,205 @@
       "codec": "zstd",
       "phase": "unpack",
       "command": "sh -c 'set -eu; \"$1\" -q -d -c \"$2\" | \"$3\" -xf - -C \"$4\"' sh /opt/homebrew/bin/zstd tests/fixtures/datasets/small-text/output/small-text.tar.zstd /usr/bin/tar tests/fixtures/datasets/small-text/output/unpack-small-text-tar-zstd",
-      "elapsed_ms": 84,
+      "elapsed_ms": 100,
       "exit_status": 0,
       "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 4,
+        "system_cpu_ms": 32,
+        "max_rss_kib": 3392
+      }
     },
     {
       "dataset": "small-binary",
       "baseline": "sfa",
       "codec": "lz4",
       "phase": "pack",
-      "command": "target/release/sfa-cli pack tests/fixtures/datasets/small-binary/input tests/fixtures/datasets/small-binary/output/small-binary.lz4.sfa --codec lz4",
-      "elapsed_ms": 10,
+      "command": "target/release/sfa-cli pack tests/fixtures/datasets/small-binary/input tests/fixtures/datasets/small-binary/output/small-binary.lz4.sfa --codec lz4 --stats-format json",
+      "elapsed_ms": 13,
       "exit_status": 0,
-      "stdout": "Pack Summary\ncodec: Lz4\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 17\nbundle_count: 1\nraw_bytes: 344064\nencoded_bytes: 4886\nduration_seconds: 0.0060\nfiles_per_second: 2833.33\nmib_per_second: 54.69\n",
+      "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "sfa_stats": {
+        "type": "pack",
+        "codec": "lz4",
+        "threads": 10,
+        "bundle_target_bytes": 4194304,
+        "small_file_threshold": 262144,
+        "entry_count": 17,
+        "bundle_count": 1,
+        "raw_bytes": 344064,
+        "encoded_bytes": 4886,
+        "duration_ms": 7,
+        "phase_breakdown": {
+          "scan_ms": {
+            "status": "measured",
+            "value": 2
+          },
+          "plan_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "encode_ms": {
+            "status": "measured",
+            "value": 4
+          },
+          "write_ms": {
+            "status": "measured",
+            "value": 0
+          }
+        }
+      },
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 1,
+        "system_cpu_ms": 4,
+        "max_rss_kib": 3680
+      }
     },
     {
       "dataset": "small-binary",
       "baseline": "sfa",
       "codec": "lz4",
       "phase": "unpack",
-      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/small-binary/output/small-binary.lz4.sfa -C tests/fixtures/datasets/small-binary/output/unpack-small-binary-sfa-lz4",
-      "elapsed_ms": 11,
+      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/small-binary/output/small-binary.lz4.sfa -C tests/fixtures/datasets/small-binary/output/unpack-small-binary-sfa-lz4 --stats-format json",
+      "elapsed_ms": 8,
       "exit_status": 0,
-      "stdout": "Unpack Summary\ncodec: Lz4\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 17\nbundle_count: 1\nraw_bytes: 344064\nencoded_bytes: 4886\nduration_seconds: 0.0050\nfiles_per_second: 3400.00\nmib_per_second: 65.62\n",
+      "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "sfa_stats": {
+        "type": "unpack",
+        "codec": "lz4",
+        "threads": 10,
+        "entry_count": 17,
+        "bundle_count": 1,
+        "raw_bytes": 344064,
+        "encoded_bytes": 4886,
+        "duration_ms": 4,
+        "phase_breakdown": {
+          "header_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "manifest_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "decode_and_scatter_ms": {
+            "status": "measured",
+            "value": 2
+          },
+          "restore_finalize_ms": {
+            "status": "measured",
+            "value": 1
+          }
+        }
+      },
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 1,
+        "system_cpu_ms": 4,
+        "max_rss_kib": 2448
+      }
     },
     {
       "dataset": "small-binary",
       "baseline": "sfa",
       "codec": "zstd",
       "phase": "pack",
-      "command": "target/release/sfa-cli pack tests/fixtures/datasets/small-binary/input tests/fixtures/datasets/small-binary/output/small-binary.zstd.sfa --codec zstd",
-      "elapsed_ms": 9,
+      "command": "target/release/sfa-cli pack tests/fixtures/datasets/small-binary/input tests/fixtures/datasets/small-binary/output/small-binary.zstd.sfa --codec zstd --stats-format json",
+      "elapsed_ms": 8,
       "exit_status": 0,
-      "stdout": "Pack Summary\ncodec: Zstd\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 17\nbundle_count: 1\nraw_bytes: 344064\nencoded_bytes: 3575\nduration_seconds: 0.0040\nfiles_per_second: 4250.00\nmib_per_second: 82.03\n",
+      "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "sfa_stats": {
+        "type": "pack",
+        "codec": "zstd",
+        "threads": 10,
+        "bundle_target_bytes": 4194304,
+        "small_file_threshold": 262144,
+        "entry_count": 17,
+        "bundle_count": 1,
+        "raw_bytes": 344064,
+        "encoded_bytes": 3575,
+        "duration_ms": 3,
+        "phase_breakdown": {
+          "scan_ms": {
+            "status": "measured",
+            "value": 1
+          },
+          "plan_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "encode_ms": {
+            "status": "measured",
+            "value": 2
+          },
+          "write_ms": {
+            "status": "measured",
+            "value": 0
+          }
+        }
+      },
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 1,
+        "system_cpu_ms": 3,
+        "max_rss_kib": 4288
+      }
     },
     {
       "dataset": "small-binary",
       "baseline": "sfa",
       "codec": "zstd",
       "phase": "unpack",
-      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/small-binary/output/small-binary.zstd.sfa -C tests/fixtures/datasets/small-binary/output/unpack-small-binary-sfa-zstd",
-      "elapsed_ms": 9,
+      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/small-binary/output/small-binary.zstd.sfa -C tests/fixtures/datasets/small-binary/output/unpack-small-binary-sfa-zstd --stats-format json",
+      "elapsed_ms": 8,
       "exit_status": 0,
-      "stdout": "Unpack Summary\ncodec: Zstd\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 17\nbundle_count: 1\nraw_bytes: 344064\nencoded_bytes: 3575\nduration_seconds: 0.0050\nfiles_per_second: 3400.00\nmib_per_second: 65.62\n",
+      "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "sfa_stats": {
+        "type": "unpack",
+        "codec": "zstd",
+        "threads": 10,
+        "entry_count": 17,
+        "bundle_count": 1,
+        "raw_bytes": 344064,
+        "encoded_bytes": 3575,
+        "duration_ms": 5,
+        "phase_breakdown": {
+          "header_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "manifest_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "decode_and_scatter_ms": {
+            "status": "measured",
+            "value": 3
+          },
+          "restore_finalize_ms": {
+            "status": "measured",
+            "value": 1
+          }
+        }
+      },
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 1,
+        "system_cpu_ms": 3,
+        "max_rss_kib": 2448
+      }
     },
     {
       "dataset": "small-binary",
@@ -211,11 +520,17 @@
       "codec": "lz4",
       "phase": "pack",
       "command": "sh -c 'set -eu; \"$1\" -cf - -C \"$2\" . | \"$3\" -q -f - \"$4\"' sh /usr/bin/tar tests/fixtures/datasets/small-binary/input /opt/homebrew/bin/lz4 tests/fixtures/datasets/small-binary/output/small-binary.tar.lz4",
-      "elapsed_ms": 87,
+      "elapsed_ms": 49,
       "exit_status": 0,
       "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 3,
+        "system_cpu_ms": 19,
+        "max_rss_kib": 3808
+      }
     },
     {
       "dataset": "small-binary",
@@ -223,11 +538,17 @@
       "codec": "lz4",
       "phase": "unpack",
       "command": "sh -c 'set -eu; \"$1\" -q -d -c \"$2\" | \"$3\" -xf - -C \"$4\"' sh /opt/homebrew/bin/lz4 tests/fixtures/datasets/small-binary/output/small-binary.tar.lz4 /usr/bin/tar tests/fixtures/datasets/small-binary/output/unpack-small-binary-tar-lz4",
-      "elapsed_ms": 100,
+      "elapsed_ms": 41,
       "exit_status": 0,
       "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 3,
+        "system_cpu_ms": 19,
+        "max_rss_kib": 3280
+      }
     },
     {
       "dataset": "small-binary",
@@ -235,11 +556,17 @@
       "codec": "zstd",
       "phase": "pack",
       "command": "sh -c 'set -eu; \"$1\" -cf - -C \"$2\" . | \"$3\" -q -f -o \"$4\"' sh /usr/bin/tar tests/fixtures/datasets/small-binary/input /opt/homebrew/bin/zstd tests/fixtures/datasets/small-binary/output/small-binary.tar.zstd",
-      "elapsed_ms": 46,
+      "elapsed_ms": 43,
       "exit_status": 0,
       "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 3,
+        "system_cpu_ms": 20,
+        "max_rss_kib": 4192
+      }
     },
     {
       "dataset": "small-binary",
@@ -247,59 +574,205 @@
       "codec": "zstd",
       "phase": "unpack",
       "command": "sh -c 'set -eu; \"$1\" -q -d -c \"$2\" | \"$3\" -xf - -C \"$4\"' sh /opt/homebrew/bin/zstd tests/fixtures/datasets/small-binary/output/small-binary.tar.zstd /usr/bin/tar tests/fixtures/datasets/small-binary/output/unpack-small-binary-tar-zstd",
-      "elapsed_ms": 58,
+      "elapsed_ms": 50,
       "exit_status": 0,
       "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 3,
+        "system_cpu_ms": 20,
+        "max_rss_kib": 3312
+      }
     },
     {
       "dataset": "large-control",
       "baseline": "sfa",
       "codec": "lz4",
       "phase": "pack",
-      "command": "target/release/sfa-cli pack tests/fixtures/datasets/large-control/input tests/fixtures/datasets/large-control/output/large-control.lz4.sfa --codec lz4",
-      "elapsed_ms": 14,
+      "command": "target/release/sfa-cli pack tests/fixtures/datasets/large-control/input tests/fixtures/datasets/large-control/output/large-control.lz4.sfa --codec lz4 --stats-format json",
+      "elapsed_ms": 18,
       "exit_status": 0,
-      "stdout": "Pack Summary\ncodec: Lz4\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 5\nbundle_count: 3\nraw_bytes: 4740516\nencoded_bytes: 839072\nduration_seconds: 0.0070\nfiles_per_second: 714.29\nmib_per_second: 645.84\n",
+      "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "sfa_stats": {
+        "type": "pack",
+        "codec": "lz4",
+        "threads": 10,
+        "bundle_target_bytes": 4194304,
+        "small_file_threshold": 262144,
+        "entry_count": 5,
+        "bundle_count": 3,
+        "raw_bytes": 4740516,
+        "encoded_bytes": 839072,
+        "duration_ms": 12,
+        "phase_breakdown": {
+          "scan_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "plan_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "encode_ms": {
+            "status": "measured",
+            "value": 11
+          },
+          "write_ms": {
+            "status": "measured",
+            "value": 0
+          }
+        }
+      },
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 4,
+        "system_cpu_ms": 6,
+        "max_rss_kib": 16752
+      }
     },
     {
       "dataset": "large-control",
       "baseline": "sfa",
       "codec": "lz4",
       "phase": "unpack",
-      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/large-control/output/large-control.lz4.sfa -C tests/fixtures/datasets/large-control/output/unpack-large-control-sfa-lz4",
+      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/large-control/output/large-control.lz4.sfa -C tests/fixtures/datasets/large-control/output/unpack-large-control-sfa-lz4 --stats-format json",
+      "elapsed_ms": 15,
+      "exit_status": 0,
+      "stdout": null,
+      "stderr": null,
+      "notes": null,
+      "sfa_stats": {
+        "type": "unpack",
+        "codec": "lz4",
+        "threads": 10,
+        "entry_count": 5,
+        "bundle_count": 3,
+        "raw_bytes": 4740516,
+        "encoded_bytes": 839072,
+        "duration_ms": 11,
+        "phase_breakdown": {
+          "header_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "manifest_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "decode_and_scatter_ms": {
+            "status": "measured",
+            "value": 4
+          },
+          "restore_finalize_ms": {
+            "status": "measured",
+            "value": 6
+          }
+        }
+      },
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 3,
+        "system_cpu_ms": 3,
+        "max_rss_kib": 6960
+      }
+    },
+    {
+      "dataset": "large-control",
+      "baseline": "sfa",
+      "codec": "zstd",
+      "phase": "pack",
+      "command": "target/release/sfa-cli pack tests/fixtures/datasets/large-control/input tests/fixtures/datasets/large-control/output/large-control.zstd.sfa --codec zstd --stats-format json",
       "elapsed_ms": 10,
       "exit_status": 0,
-      "stdout": "Unpack Summary\ncodec: Lz4\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 5\nbundle_count: 3\nraw_bytes: 4740516\nencoded_bytes: 839072\nduration_seconds: 0.0050\nfiles_per_second: 1000.00\nmib_per_second: 904.18\n",
+      "stdout": null,
       "stderr": null,
-      "notes": null
-    },
-    {
-      "dataset": "large-control",
-      "baseline": "sfa",
-      "codec": "zstd",
-      "phase": "pack",
-      "command": "target/release/sfa-cli pack tests/fixtures/datasets/large-control/input tests/fixtures/datasets/large-control/output/large-control.zstd.sfa --codec zstd",
-      "elapsed_ms": 19,
-      "exit_status": 0,
-      "stdout": "Pack Summary\ncodec: Zstd\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 5\nbundle_count: 3\nraw_bytes: 4740516\nencoded_bytes: 223714\nduration_seconds: 0.0060\nfiles_per_second: 833.33\nmib_per_second: 753.48\n",
-      "stderr": null,
-      "notes": null
+      "notes": null,
+      "sfa_stats": {
+        "type": "pack",
+        "codec": "zstd",
+        "threads": 10,
+        "bundle_target_bytes": 4194304,
+        "small_file_threshold": 262144,
+        "entry_count": 5,
+        "bundle_count": 3,
+        "raw_bytes": 4740516,
+        "encoded_bytes": 223714,
+        "duration_ms": 5,
+        "phase_breakdown": {
+          "scan_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "plan_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "encode_ms": {
+            "status": "measured",
+            "value": 4
+          },
+          "write_ms": {
+            "status": "measured",
+            "value": 0
+          }
+        }
+      },
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 4,
+        "system_cpu_ms": 4,
+        "max_rss_kib": 14224
+      }
     },
     {
       "dataset": "large-control",
       "baseline": "sfa",
       "codec": "zstd",
       "phase": "unpack",
-      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/large-control/output/large-control.zstd.sfa -C tests/fixtures/datasets/large-control/output/unpack-large-control-sfa-zstd",
-      "elapsed_ms": 27,
+      "command": "target/release/sfa-cli unpack tests/fixtures/datasets/large-control/output/large-control.zstd.sfa -C tests/fixtures/datasets/large-control/output/unpack-large-control-sfa-zstd --stats-format json",
+      "elapsed_ms": 20,
       "exit_status": 0,
-      "stdout": "Unpack Summary\ncodec: Zstd\nthreads: 10\nbundle_target_bytes: 4194304\nsmall_file_threshold: 262144\nentry_count: 5\nbundle_count: 3\nraw_bytes: 4740516\nencoded_bytes: 223714\nduration_seconds: 0.0160\nfiles_per_second: 312.50\nmib_per_second: 282.56\n",
+      "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "sfa_stats": {
+        "type": "unpack",
+        "codec": "zstd",
+        "threads": 10,
+        "entry_count": 5,
+        "bundle_count": 3,
+        "raw_bytes": 4740516,
+        "encoded_bytes": 223714,
+        "duration_ms": 11,
+        "phase_breakdown": {
+          "header_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "manifest_ms": {
+            "status": "measured",
+            "value": 0
+          },
+          "decode_and_scatter_ms": {
+            "status": "measured",
+            "value": 5
+          },
+          "restore_finalize_ms": {
+            "status": "measured",
+            "value": 6
+          }
+        }
+      },
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 3,
+        "system_cpu_ms": 4,
+        "max_rss_kib": 7296
+      }
     },
     {
       "dataset": "large-control",
@@ -307,11 +780,17 @@
       "codec": "lz4",
       "phase": "pack",
       "command": "sh -c 'set -eu; \"$1\" -cf - -C \"$2\" . | \"$3\" -q -f - \"$4\"' sh /usr/bin/tar tests/fixtures/datasets/large-control/input /opt/homebrew/bin/lz4 tests/fixtures/datasets/large-control/output/large-control.tar.lz4",
-      "elapsed_ms": 97,
+      "elapsed_ms": 41,
       "exit_status": 0,
       "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 6,
+        "system_cpu_ms": 12,
+        "max_rss_kib": 7104
+      }
     },
     {
       "dataset": "large-control",
@@ -319,11 +798,17 @@
       "codec": "lz4",
       "phase": "unpack",
       "command": "sh -c 'set -eu; \"$1\" -q -d -c \"$2\" | \"$3\" -xf - -C \"$4\"' sh /opt/homebrew/bin/lz4 tests/fixtures/datasets/large-control/output/large-control.tar.lz4 /usr/bin/tar tests/fixtures/datasets/large-control/output/unpack-large-control-tar-lz4",
-      "elapsed_ms": 111,
+      "elapsed_ms": 123,
       "exit_status": 0,
       "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 4,
+        "system_cpu_ms": 20,
+        "max_rss_kib": 6880
+      }
     },
     {
       "dataset": "large-control",
@@ -331,11 +816,17 @@
       "codec": "zstd",
       "phase": "pack",
       "command": "sh -c 'set -eu; \"$1\" -cf - -C \"$2\" . | \"$3\" -q -f -o \"$4\"' sh /usr/bin/tar tests/fixtures/datasets/large-control/input /opt/homebrew/bin/zstd tests/fixtures/datasets/large-control/output/large-control.tar.zstd",
-      "elapsed_ms": 67,
+      "elapsed_ms": 34,
       "exit_status": 0,
       "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 7,
+        "system_cpu_ms": 14,
+        "max_rss_kib": 9264
+      }
     },
     {
       "dataset": "large-control",
@@ -343,11 +834,17 @@
       "codec": "zstd",
       "phase": "unpack",
       "command": "sh -c 'set -eu; \"$1\" -q -d -c \"$2\" | \"$3\" -xf - -C \"$4\"' sh /opt/homebrew/bin/zstd tests/fixtures/datasets/large-control/output/large-control.tar.zstd /usr/bin/tar tests/fixtures/datasets/large-control/output/unpack-large-control-tar-zstd",
-      "elapsed_ms": 34,
+      "elapsed_ms": 63,
       "exit_status": 0,
       "stdout": null,
       "stderr": null,
-      "notes": null
+      "notes": null,
+      "resource_observation": {
+        "sampler": "wait4/getrusage",
+        "user_cpu_ms": 5,
+        "system_cpu_ms": 17,
+        "max_rss_kib": 4208
+      }
     }
   ]
 }

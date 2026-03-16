@@ -1,6 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::harness::{Baseline, BenchmarkJob, Codec};
+use sfa_core::{PackStats, UnpackStats};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
 pub struct BenchmarkSuiteReport {
@@ -45,6 +46,8 @@ pub struct BenchmarkEnvironment {
     pub tar: ToolMetadata,
     pub sfa: ToolMetadata,
     pub codecs: Vec<CodecToolMetadata>,
+    #[serde(default)]
+    pub resource_sampler: ResourceSamplerMetadata,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
@@ -70,6 +73,46 @@ pub struct DatasetSummary {
     pub total_bytes: u64,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+pub struct ResourceSamplerMetadata {
+    pub name: String,
+    pub supported: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SfaCommandStats {
+    Pack(PackStats),
+    Unpack(UnpackStats),
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ResourceObservation {
+    pub sampler: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_cpu_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system_cpu_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_rss_kib: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+impl ResourceObservation {
+    pub fn unavailable(sampler: impl Into<String>, note: impl Into<String>) -> Self {
+        Self {
+            sampler: sampler.into(),
+            user_cpu_ms: None,
+            system_cpu_ms: None,
+            max_rss_kib: None,
+            note: Some(note.into()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BenchmarkRecord {
     pub dataset: String,
@@ -82,6 +125,10 @@ pub struct BenchmarkRecord {
     pub stdout: Option<String>,
     pub stderr: Option<String>,
     pub notes: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sfa_stats: Option<SfaCommandStats>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource_observation: Option<ResourceObservation>,
 }
 
 impl BenchmarkRecord {
@@ -97,6 +144,8 @@ impl BenchmarkRecord {
             stdout: None,
             stderr: None,
             notes: Some("dry-run only".to_string()),
+            sfa_stats: None,
+            resource_observation: None,
         }
     }
 
@@ -109,6 +158,8 @@ impl BenchmarkRecord {
         exit_status: i32,
         stdout: String,
         stderr: String,
+        sfa_stats: Option<SfaCommandStats>,
+        resource_observation: Option<ResourceObservation>,
     ) -> Self {
         Self {
             dataset: job.case.name.clone(),
@@ -129,6 +180,8 @@ impl BenchmarkRecord {
                 Some(stderr)
             },
             notes: None,
+            sfa_stats,
+            resource_observation,
         }
     }
 }

@@ -97,6 +97,12 @@ CARGO_HOME=/tmp/cargo-home cargo build --release -p sfa-cli
 ```
 
 刷新后应确认 `benches/results/baseline-v0.1.0.json` 已提交，且 `cargo test -p sfa-bench` 仍能读取并校验该结果资产。
+如果当前发版依赖 benchmark 作为性能证据，还应确认 committed baseline 中：
+
+- `environment.resource_sampler` 与支持环境说明一致
+- 每条执行记录都包含命令 wall-time
+- `sfa` 记录包含阶段级 `sfa_stats`
+- 支持环境下的记录包含 `user_cpu_ms`、`system_cpu_ms` 和 `max_rss_kib`
 
 ### 4. 整理 release notes
 

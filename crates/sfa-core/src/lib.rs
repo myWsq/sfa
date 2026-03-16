@@ -22,4 +22,7 @@ pub use model::{
     ExtentRecord, Manifest, PlannerInputEntry,
 };
 pub use planner::{PlannedArchive, plan_archive};
-pub use stats::{PackStats, UnpackStats};
+pub use stats::{
+    ObservationStatus, ObservedMetric, PackPhaseBreakdown, PackStats, UnpackPhaseBreakdown,
+    UnpackStats,
+};

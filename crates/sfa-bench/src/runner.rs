@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Output, Stdio};
 use std::time::Instant;
 
 use walkdir::WalkDir;
@@ -11,8 +12,9 @@ use crate::harness::{
 };
 use crate::report::{
     BenchmarkEnvironment, BenchmarkRecord, BenchmarkSuiteReport, CodecToolMetadata, DatasetSummary,
-    ToolMetadata,
+    ResourceObservation, ResourceSamplerMetadata, SfaCommandStats, ToolMetadata,
 };
+use sfa_core::{PackStats, UnpackStats};
 
 #[derive(Debug, Clone)]
 pub struct RunnerConfig {
@@ -37,6 +39,67 @@ struct PreparedTools {
     tar_bin: PathBuf,
     codec_bins: BTreeMap<Codec, PathBuf>,
     environment: BenchmarkEnvironment,
+    resource_sampler: ResourceSampler,
+}
+
+#[derive(Debug, Clone)]
+enum ResourceSampler {
+    Wait4Getrusage,
+    #[cfg(not(unix))]
+    Unsupported {
+        note: String,
+    },
+}
+
+impl ResourceSampler {
+    fn detect() -> Self {
+        #[cfg(unix)]
+        {
+            Self::Wait4Getrusage
+        }
+        #[cfg(not(unix))]
+        {
+            Self::Unsupported {
+                note: "resource sampling requires a Unix host with wait4/getrusage".to_string(),
+            }
+        }
+    }
+
+    fn metadata(&self) -> ResourceSamplerMetadata {
+        match self {
+            Self::Wait4Getrusage => ResourceSamplerMetadata {
+                name: "wait4/getrusage".to_string(),
+                supported: true,
+                note: Some(
+                    "max_rss_kib is normalized from host-specific ru_maxrss units".to_string(),
+                ),
+            },
+            #[cfg(not(unix))]
+            Self::Unsupported { note } => ResourceSamplerMetadata {
+                name: "wait4/getrusage".to_string(),
+                supported: false,
+                note: Some(note.clone()),
+            },
+        }
+    }
+
+    fn unavailable_observation(&self) -> ResourceObservation {
+        match self {
+            Self::Wait4Getrusage => ResourceObservation::unavailable(
+                "wait4/getrusage",
+                "resource observation was not collected",
+            ),
+            #[cfg(not(unix))]
+            Self::Unsupported { note } => {
+                ResourceObservation::unavailable("wait4/getrusage", note.clone())
+            }
+        }
+    }
+}
+
+struct CommandExecution {
+    output: Output,
+    resource_observation: Option<ResourceObservation>,
 }
 
 pub fn run_jobs(
@@ -62,12 +125,20 @@ pub fn run_jobs(
             .ok_or_else(|| format!("missing codec tool for {}", job.codec.as_str()))?;
         let pack = build_pack_command(job, &tools.resolved_sfa_bin, &tools.tar_bin, codec_bin);
         let unpack = build_unpack_command(job, &tools.resolved_sfa_bin, &tools.tar_bin, codec_bin);
-        report
-            .records
-            .push(run_record(job, "pack", &pack, cfg.dry_run)?);
-        report
-            .records
-            .push(run_record(job, "unpack", &unpack, cfg.dry_run)?);
+        report.records.push(run_record(
+            job,
+            "pack",
+            &pack,
+            cfg.dry_run,
+            &tools.resource_sampler,
+        )?);
+        report.records.push(run_record(
+            job,
+            "unpack",
+            &unpack,
+            cfg.dry_run,
+            &tools.resource_sampler,
+        )?);
         cleanup_job_workspace(job)?;
     }
     Ok(report)
@@ -104,6 +175,7 @@ fn run_record(
     phase: &'static str,
     cmd: &CommandSpec,
     dry_run: bool,
+    resource_sampler: &ResourceSampler,
 ) -> Result<BenchmarkRecord, Box<dyn std::error::Error + Send + Sync>> {
     if dry_run {
         return Ok(BenchmarkRecord::from_dry_run(
@@ -114,13 +186,13 @@ fn run_record(
     }
 
     let started = Instant::now();
-    let output =
-        command_output(cmd).map_err(|e| format!("command failed to spawn: {cmd:?}: {e}"))?;
+    let execution = command_output(cmd, resource_sampler)
+        .map_err(|e| format!("command failed to spawn: {cmd:?}: {e}"))?;
     let elapsed_ms = started.elapsed().as_millis() as u64;
 
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let status = output.status.code().unwrap_or(1);
+    let stderr = String::from_utf8_lossy(&execution.output.stderr).to_string();
+    let mut stdout = String::from_utf8_lossy(&execution.output.stdout).to_string();
+    let status = execution.output.status.code().unwrap_or(1);
     if status != 0 {
         return Err(format!(
             "benchmark command failed for {} {} {} {}: exit {status}\ncommand: {}\nstdout:\n{}\nstderr:\n{}",
@@ -138,6 +210,14 @@ fn run_record(
         .into());
     }
 
+    let sfa_stats = match job.baseline {
+        crate::harness::Baseline::Sfa => Some(parse_sfa_stats(phase, &stdout)?),
+        crate::harness::Baseline::Tar => None,
+    };
+    if matches!(job.baseline, crate::harness::Baseline::Sfa) {
+        stdout.clear();
+    }
+
     Ok(BenchmarkRecord::from_execution(
         job,
         phase,
@@ -146,17 +226,34 @@ fn run_record(
         status,
         stdout,
         stderr,
+        sfa_stats,
+        execution
+            .resource_observation
+            .or_else(|| Some(resource_sampler.unavailable_observation())),
     ))
 }
 
 fn command_output(
     cmd: &CommandSpec,
-) -> Result<std::process::Output, Box<dyn std::error::Error + Send + Sync>> {
-    Command::new(&cmd.program)
-        .args(&cmd.args)
-        .env("LC_ALL", "C")
-        .output()
-        .map_err(|e| format!("unable to execute {}: {e}", cmd.to_shell_line()).into())
+    resource_sampler: &ResourceSampler,
+) -> Result<CommandExecution, Box<dyn std::error::Error + Send + Sync>> {
+    #[cfg(unix)]
+    {
+        let _ = resource_sampler;
+        command_output_unix(cmd)
+    }
+    #[cfg(not(unix))]
+    {
+        let output = Command::new(&cmd.program)
+            .args(&cmd.args)
+            .env("LC_ALL", "C")
+            .output()
+            .map_err(|e| format!("unable to execute {}: {e}", cmd.to_shell_line()))?;
+        Ok(CommandExecution {
+            output,
+            resource_observation: Some(resource_sampler.unavailable_observation()),
+        })
+    }
 }
 
 pub fn write_report(
@@ -179,6 +276,7 @@ fn prepare_tools(
     let tar = resolve_optional_command("tar")?;
     let lz4 = resolve_optional_command("lz4")?;
     let zstd = resolve_optional_command("zstd")?;
+    let resource_sampler = ResourceSampler::detect();
 
     if !cfg.dry_run {
         ensure_input_dirs_populated(jobs)?;
@@ -202,7 +300,14 @@ fn prepare_tools(
             resolved_sfa_bin: sfa_bin,
             tar_bin,
             codec_bins: BTreeMap::from([(Codec::Lz4, lz4_bin), (Codec::Zstd, zstd_bin)]),
-            environment: build_environment(resolved_sfa_bin, tar, lz4, zstd),
+            environment: build_environment(
+                resolved_sfa_bin,
+                tar,
+                lz4,
+                zstd,
+                resource_sampler.metadata(),
+            ),
+            resource_sampler,
         })
     } else {
         Ok(PreparedTools {
@@ -220,7 +325,14 @@ fn prepare_tools(
                     zstd.clone().unwrap_or_else(|| PathBuf::from("zstd")),
                 ),
             ]),
-            environment: build_environment(resolved_sfa_bin, tar, lz4, zstd),
+            environment: build_environment(
+                resolved_sfa_bin,
+                tar,
+                lz4,
+                zstd,
+                resource_sampler.metadata(),
+            ),
+            resource_sampler,
         })
     }
 }
@@ -300,6 +412,7 @@ fn build_environment(
     tar_bin: Option<PathBuf>,
     lz4_bin: Option<PathBuf>,
     zstd_bin: Option<PathBuf>,
+    resource_sampler: ResourceSamplerMetadata,
 ) -> BenchmarkEnvironment {
     BenchmarkEnvironment {
         host_os: std::env::consts::OS.to_string(),
@@ -316,6 +429,7 @@ fn build_environment(
                 tool: tool_metadata("zstd", zstd_bin.as_deref()),
             },
         ],
+        resource_sampler,
     }
 }
 
@@ -384,6 +498,15 @@ fn resolve_optional_command(
         }
     }
 
+    for candidate in [
+        PathBuf::from("/opt/homebrew/bin").join(name),
+        PathBuf::from("/usr/local/bin").join(name),
+    ] {
+        if candidate.exists() {
+            return Ok(Some(candidate));
+        }
+    }
+
     Ok(None)
 }
 
@@ -404,4 +527,95 @@ fn remove_path_if_exists(path: &Path) -> Result<(), Box<dyn std::error::Error + 
         std::fs::remove_file(path)?;
     }
     Ok(())
+}
+
+fn parse_sfa_stats(
+    phase: &str,
+    stdout: &str,
+) -> Result<SfaCommandStats, Box<dyn std::error::Error + Send + Sync>> {
+    match phase {
+        "pack" => Ok(SfaCommandStats::Pack(serde_json::from_str::<PackStats>(
+            stdout.trim(),
+        )?)),
+        "unpack" => Ok(SfaCommandStats::Unpack(
+            serde_json::from_str::<UnpackStats>(stdout.trim())?,
+        )),
+        other => Err(format!("unsupported SFA benchmark phase: {other}").into()),
+    }
+}
+
+#[cfg(unix)]
+fn command_output_unix(
+    cmd: &CommandSpec,
+) -> Result<CommandExecution, Box<dyn std::error::Error + Send + Sync>> {
+    use std::mem::MaybeUninit;
+    use std::os::unix::process::ExitStatusExt;
+
+    let mut child = Command::new(&cmd.program)
+        .args(&cmd.args)
+        .env("LC_ALL", "C")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("unable to execute {}: {e}", cmd.to_shell_line()))?;
+
+    let mut stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| format!("failed to capture stdout for {}", cmd.to_shell_line()))?;
+    let mut stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| format!("failed to capture stderr for {}", cmd.to_shell_line()))?;
+
+    let pid = child.id() as libc::pid_t;
+    let mut status = 0;
+    let mut usage = MaybeUninit::<libc::rusage>::uninit();
+    let waited = unsafe { libc::wait4(pid, &mut status, 0, usage.as_mut_ptr()) };
+    if waited < 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+
+    let mut stdout_buf = Vec::new();
+    stdout.read_to_end(&mut stdout_buf)?;
+    let mut stderr_buf = Vec::new();
+    stderr.read_to_end(&mut stderr_buf)?;
+
+    let usage = unsafe { usage.assume_init() };
+    Ok(CommandExecution {
+        output: Output {
+            status: std::process::ExitStatus::from_raw(status),
+            stdout: stdout_buf,
+            stderr: stderr_buf,
+        },
+        resource_observation: Some(resource_observation_from_rusage(&usage)),
+    })
+}
+
+#[cfg(unix)]
+fn resource_observation_from_rusage(usage: &libc::rusage) -> ResourceObservation {
+    ResourceObservation {
+        sampler: "wait4/getrusage".to_string(),
+        user_cpu_ms: Some(timeval_to_ms(usage.ru_utime)),
+        system_cpu_ms: Some(timeval_to_ms(usage.ru_stime)),
+        max_rss_kib: Some(normalize_max_rss_kib(usage.ru_maxrss)),
+        note: None,
+    }
+}
+
+#[cfg(unix)]
+fn timeval_to_ms(timeval: libc::timeval) -> u64 {
+    let secs = timeval.tv_sec.max(0) as u64;
+    let micros = timeval.tv_usec.max(0) as u64;
+    secs.saturating_mul(1_000).saturating_add(micros / 1_000)
+}
+
+#[cfg(all(unix, any(target_os = "macos", target_os = "ios")))]
+fn normalize_max_rss_kib(value: libc::c_long) -> u64 {
+    value.max(0) as u64 / 1024
+}
+
+#[cfg(all(unix, not(any(target_os = "macos", target_os = "ios"))))]
+fn normalize_max_rss_kib(value: libc::c_long) -> u64 {
+    value.max(0) as u64
 }

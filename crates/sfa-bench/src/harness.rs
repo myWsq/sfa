@@ -135,6 +135,8 @@ pub fn build_pack_command(
                 archive.display().to_string(),
                 "--codec".to_string(),
                 job.codec.as_str().to_string(),
+                "--stats-format".to_string(),
+                "json".to_string(),
             ],
         },
         Baseline::Tar => build_tar_pack_command(job, tar_bin, codec_bin, &archive),
@@ -157,6 +159,8 @@ pub fn build_unpack_command(
                 archive.display().to_string(),
                 "-C".to_string(),
                 unpack_to.display().to_string(),
+                "--stats-format".to_string(),
+                "json".to_string(),
             ],
         },
         Baseline::Tar => build_tar_unpack_command(job, tar_bin, codec_bin, &archive, &unpack_to),
@@ -223,4 +227,45 @@ fn shell_escape(arg: &str) -> String {
         return arg.to_string();
     }
     format!("'{}'", arg.replace('\'', "'\"'\"'"))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::{
+        Baseline, BenchmarkJob, Codec, DatasetCase, build_pack_command, build_unpack_command,
+    };
+
+    fn sfa_job() -> BenchmarkJob {
+        BenchmarkJob {
+            baseline: Baseline::Sfa,
+            codec: Codec::Lz4,
+            case: DatasetCase {
+                name: "case".to_string(),
+                input_dir: "input".into(),
+                output_dir: "output".into(),
+            },
+        }
+    }
+
+    #[test]
+    fn sfa_commands_request_json_stats() {
+        let job = sfa_job();
+        let pack = build_pack_command(&job, Path::new("sfa"), Path::new("tar"), Path::new("lz4"));
+        let unpack =
+            build_unpack_command(&job, Path::new("sfa"), Path::new("tar"), Path::new("lz4"));
+
+        assert!(
+            pack.args
+                .windows(2)
+                .any(|pair| pair == ["--stats-format", "json"])
+        );
+        assert!(
+            unpack
+                .args
+                .windows(2)
+                .any(|pair| pair == ["--stats-format", "json"])
+        );
+    }
 }
