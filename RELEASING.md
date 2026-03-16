@@ -103,6 +103,8 @@ CARGO_HOME=/tmp/cargo-home cargo build --release -p sfa-cli
 - 每条执行记录都包含命令 wall-time
 - `sfa` 记录包含阶段级 `sfa_stats`
 - 支持环境下的记录包含 `user_cpu_ms`、`system_cpu_ms` 和 `max_rss_kib`
+- unpack `sfa_stats` 使用 `header`、`manifest`、`frame_read`、`decode`、`scatter`、`restore_finalize` 字段，而不是旧的 `decode_and_scatter`
+- 如果本次发版涉及 unpack pipeline 或 `--threads` 语义，应确认结果资产保留了有效线程数，并在说明中指出 unpack split phases 属于并行诊断窗口、不是可直接求和的总账
 
 ### 4. 整理 release notes
 

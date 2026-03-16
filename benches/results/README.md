@@ -2,6 +2,7 @@
 
 This directory stores committed machine-readable benchmark results for the default SFA v1 matrix.
 The committed JSON schema includes command wall-time for every record, SFA phase breakdowns for `sfa` commands, and `wait4/getrusage`-based CPU / RSS observations on supported Unix hosts.
+Unpack phase breakdowns are recorded as `header`, `manifest`, `frame_read`, `decode`, `scatter`, and `restore_finalize`; these are pipelined diagnostic windows rather than a simple additive timing ledger.
 
 Current committed baseline:
 

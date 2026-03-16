@@ -1,8 +1,11 @@
 use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
+use sfa_core::codec::decode_data;
 use sfa_core::format::FeatureFlags;
+use sfa_core::integrity::frame_hash;
 use sfa_core::{ArchiveReader, Manifest};
 
 #[derive(Debug, Serialize)]
@@ -170,16 +173,11 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let manifest = archive_reader.read_manifest()?;
     let manifest_dump = dump_manifest(&manifest);
 
-    let mut frames = Vec::new();
-    while let Some(frame) = archive_reader.next_frame()? {
-        frames.push(FrameDump {
-            bundle_id: frame.header.bundle_id,
-            raw_len: frame.header.raw_len,
-            encoded_len: frame.header.encoded_len,
-            flags: frame.header.flags,
-            frame_hash_hex: hex_u64(frame.header.frame_hash),
-        });
-    }
+    let frames = collect_frames_verified(
+        &mut archive_reader,
+        header.data_codec,
+        header.frame_hash_algo,
+    )?;
     let trailer = archive_reader.read_trailer()?.map(|trailer| TrailerDump {
         bundle_count: trailer.bundle_count,
         total_raw_bytes: trailer.total_raw_bytes,
@@ -252,6 +250,30 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     Ok(())
+}
+
+fn collect_frames_verified<R: Read>(
+    archive_reader: &mut ArchiveReader<R>,
+    codec: sfa_core::DataCodec,
+    hash_algo: sfa_core::FrameHashAlgo,
+) -> Result<Vec<FrameDump>, sfa_core::Error> {
+    let mut frames = Vec::new();
+    while let Some(frame) = archive_reader.next_frame()? {
+        let raw = decode_data(codec, &frame.payload, frame.header.raw_len as usize)?;
+        if frame_hash(hash_algo, &raw) != frame.header.frame_hash {
+            return Err(sfa_core::Error::FrameHashMismatch {
+                bundle_id: frame.header.bundle_id,
+            });
+        }
+        frames.push(FrameDump {
+            bundle_id: frame.header.bundle_id,
+            raw_len: frame.header.raw_len,
+            encoded_len: frame.header.encoded_len,
+            flags: frame.header.flags,
+            frame_hash_hex: hex_u64(frame.header.frame_hash),
+        });
+    }
+    Ok(frames)
 }
 
 fn dump_manifest(manifest: &Manifest) -> ManifestDump {
@@ -444,5 +466,43 @@ fn nibble(value: u8) -> char {
         0..=9 => (b'0' + value) as char,
         10..=15 => (b'a' + (value - 10)) as char,
         _ => unreachable!(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::TempDir;
+
+    use sfa_core::PackConfig;
+    use sfa_unixfs::pack_directory;
+
+    use super::*;
+
+    #[test]
+    fn collect_frames_verified_rejects_corrupted_payload() {
+        let temp = TempDir::new().expect("temp");
+        let archive = temp.path().join("sample.sfa");
+        fs::write(temp.path().join("one.txt"), b"one").expect("write input");
+        pack_directory(temp.path(), &archive, &PackConfig::default()).expect("pack");
+
+        let mut bytes = fs::read(&archive).expect("read archive");
+        let idx = bytes.len() - 1;
+        bytes[idx] ^= 0x55;
+        fs::write(&archive, bytes).expect("rewrite archive");
+
+        let reader = File::open(&archive).expect("open archive");
+        let mut archive_reader = ArchiveReader::new(reader);
+        let header = archive_reader.read_header().expect("header");
+        archive_reader.read_manifest().expect("manifest");
+
+        let err = collect_frames_verified(
+            &mut archive_reader,
+            header.data_codec,
+            header.frame_hash_algo,
+        )
+        .expect_err("corrupted frame payload must fail");
+        assert!(matches!(err, sfa_core::Error::FrameHashMismatch { .. }));
     }
 }

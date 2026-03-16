@@ -1,5 +1,6 @@
 use std::fs;
 use std::fs::File;
+use std::io::Read;
 use std::path::Path;
 use std::time::Instant;
 
@@ -47,6 +48,9 @@ pub trait ArchiveService {
 #[derive(Default)]
 pub struct RealArchiveService;
 
+const STDIN_ARCHIVE_PATH: &str = "-";
+const UNPACK_DIAGNOSTICS_JSON_ENV: &str = "SFA_UNPACK_DIAGNOSTICS_JSON";
+
 impl ArchiveService for RealArchiveService {
     fn pack(&self, req: PackRequest) -> Result<PackStats, CliError> {
         if !req.input_dir.is_dir() {
@@ -89,42 +93,65 @@ impl ArchiveService for RealArchiveService {
     }
 
     fn unpack(&self, req: UnpackRequest) -> Result<UnpackStats, CliError> {
-        if !req.input_archive.is_file() {
+        let reads_stdin = reads_stdin_archive(&req.input_archive);
+        if req.dry_run && reads_stdin {
+            return Err(CliError::usage(
+                "dry-run is not supported when reading an archive from stdin",
+            ));
+        }
+        if !reads_stdin && !req.input_archive.is_file() {
             return Err(CliError::io(format!(
                 "input archive does not exist: {}",
                 req.input_archive.display()
             )));
         }
         if !req.dry_run {
-            let config = UnpackConfig {
-                threads: req.threads,
-                overwrite: if req.overwrite {
-                    CoreOverwritePolicy::Replace
+            let config = build_unpack_config(&req);
+            let diagnostics_path = std::env::var_os(UNPACK_DIAGNOSTICS_JSON_ENV)
+                .filter(|value| !value.is_empty())
+                .map(std::path::PathBuf::from);
+            let stats = if let Some(path) = diagnostics_path.as_ref() {
+                let (stats, diagnostics) = if reads_stdin {
+                    let stdin = std::io::stdin();
+                    unpack_from_reader_with_diagnostics(stdin.lock(), &req.output_dir, &config)?
                 } else {
-                    CoreOverwritePolicy::Error
-                },
-                restore_owner: match req.restore_owner {
-                    RestoreOwnerPolicy::Auto | RestoreOwnerPolicy::Never => {
-                        CoreRestoreOwnerPolicy::Skip
-                    }
-                    RestoreOwnerPolicy::Preserve => CoreRestoreOwnerPolicy::Preserve,
-                },
-                integrity: map_integrity(req.integrity),
+                    sfa_unixfs::unpack_archive_with_diagnostics(
+                        &req.input_archive,
+                        &req.output_dir,
+                        &config,
+                    )
+                    .map_err(map_unixfs_error)?
+                };
+                write_unpack_diagnostics(path, &stats, &diagnostics)?;
+                stats
+            } else if reads_stdin {
+                let stdin = std::io::stdin();
+                unpack_from_reader(stdin.lock(), &req.output_dir, &config)?
+            } else {
+                sfa_unixfs::unpack_archive(&req.input_archive, &req.output_dir, &config)
+                    .map_err(map_unixfs_error)?
             };
-            let stats = sfa_unixfs::unpack_archive(&req.input_archive, &req.output_dir, &config)
-                .map_err(map_unixfs_error)?;
             return Ok(stats);
         }
         let start = Instant::now();
         let archive_size = fs::metadata(&req.input_archive)
             .map_err(|e| CliError::io(format!("failed to read archive metadata: {e}")))?
             .len();
+        let header = read_archive_header(&req.input_archive);
         let threads = req.threads.unwrap_or_else(|| {
-            std::thread::available_parallelism()
-                .map(usize::from)
-                .unwrap_or(1)
+            header
+                .as_ref()
+                .map(|header| usize::from(header.suggested_parallelism.max(1)))
+                .unwrap_or_else(|| {
+                    std::thread::available_parallelism()
+                        .map(usize::from)
+                        .unwrap_or(1)
+                })
         });
-        let codec = infer_archive_codec(&req.input_archive).unwrap_or(DataCodec::Lz4);
+        let codec = header
+            .as_ref()
+            .map(map_archive_codec)
+            .unwrap_or(DataCodec::Lz4);
         Ok(UnpackStats {
             codec: codec.as_str().to_string(),
             threads,
@@ -140,6 +167,65 @@ impl ArchiveService for RealArchiveService {
     }
 }
 
+fn build_unpack_config(req: &UnpackRequest) -> UnpackConfig {
+    UnpackConfig {
+        threads: req.threads,
+        overwrite: if req.overwrite {
+            CoreOverwritePolicy::Replace
+        } else {
+            CoreOverwritePolicy::Error
+        },
+        restore_owner: match req.restore_owner {
+            RestoreOwnerPolicy::Auto | RestoreOwnerPolicy::Never => CoreRestoreOwnerPolicy::Skip,
+            RestoreOwnerPolicy::Preserve => CoreRestoreOwnerPolicy::Preserve,
+        },
+        integrity: map_integrity(req.integrity),
+    }
+}
+
+fn unpack_from_reader<R: Read>(
+    reader: R,
+    output_dir: &Path,
+    config: &UnpackConfig,
+) -> Result<UnpackStats, CliError> {
+    sfa_unixfs::unpack_reader_to_dir(reader, output_dir, config).map_err(map_unixfs_error)
+}
+
+fn unpack_from_reader_with_diagnostics<R: Read>(
+    reader: R,
+    output_dir: &Path,
+    config: &UnpackConfig,
+) -> Result<(UnpackStats, sfa_unixfs::UnpackDiagnostics), CliError> {
+    sfa_unixfs::unpack_reader_to_dir_with_diagnostics(reader, output_dir, config)
+        .map_err(map_unixfs_error)
+}
+
+fn reads_stdin_archive(path: &Path) -> bool {
+    path == Path::new(STDIN_ARCHIVE_PATH)
+}
+
+fn write_unpack_diagnostics(
+    path: &Path,
+    stats: &UnpackStats,
+    diagnostics: &sfa_unixfs::UnpackDiagnostics,
+) -> Result<(), CliError> {
+    #[derive(serde::Serialize)]
+    struct DiagnosticsReport<'a> {
+        stats: &'a UnpackStats,
+        diagnostics: &'a sfa_unixfs::UnpackDiagnostics,
+    }
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| CliError::io(format!("failed to create diagnostics directory: {e}")))?;
+    }
+    let json = serde_json::to_vec_pretty(&DiagnosticsReport { stats, diagnostics })
+        .map_err(|e| CliError::internal(format!("failed to encode unpack diagnostics: {e}")))?;
+    fs::write(path, json)
+        .map_err(|e| CliError::io(format!("failed to write unpack diagnostics: {e}")))?;
+    Ok(())
+}
+
 fn map_codec(codec: DataCodec) -> CoreDataCodec {
     match codec {
         DataCodec::Lz4 => CoreDataCodec::Lz4,
@@ -147,14 +233,17 @@ fn map_codec(codec: DataCodec) -> CoreDataCodec {
     }
 }
 
-fn infer_archive_codec(path: &Path) -> Option<DataCodec> {
+fn read_archive_header(path: &Path) -> Option<sfa_core::HeaderV1> {
     let mut file = File::open(path).ok()?;
-    let header = read_header(&mut file).ok()?;
-    Some(match header.data_codec {
+    read_header(&mut file).ok()
+}
+
+fn map_archive_codec(header: &sfa_core::HeaderV1) -> DataCodec {
+    match header.data_codec {
         CoreDataCodec::Lz4 => DataCodec::Lz4,
         CoreDataCodec::Zstd => DataCodec::Zstd,
         CoreDataCodec::None => DataCodec::Lz4,
-    })
+    }
 }
 
 fn map_integrity(mode: IntegrityMode) -> CoreIntegrityMode {

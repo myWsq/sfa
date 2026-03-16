@@ -58,10 +58,13 @@ impl PackPhaseBreakdown {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct UnpackPhaseBreakdown {
     pub header_ms: ObservedMetric,
     pub manifest_ms: ObservedMetric,
-    pub decode_and_scatter_ms: ObservedMetric,
+    pub frame_read_ms: ObservedMetric,
+    pub decode_ms: ObservedMetric,
+    pub scatter_ms: ObservedMetric,
     pub restore_finalize_ms: ObservedMetric,
 }
 
@@ -71,7 +74,9 @@ impl UnpackPhaseBreakdown {
         Self {
             header_ms: ObservedMetric::unavailable(note.clone()),
             manifest_ms: ObservedMetric::unavailable(note.clone()),
-            decode_and_scatter_ms: ObservedMetric::unavailable(note.clone()),
+            frame_read_ms: ObservedMetric::unavailable(note.clone()),
+            decode_ms: ObservedMetric::unavailable(note.clone()),
+            scatter_ms: ObservedMetric::unavailable(note.clone()),
             restore_finalize_ms: ObservedMetric::unavailable(note),
         }
     }
@@ -163,6 +168,9 @@ mod tests {
         assert_eq!(pack.scan_ms.status, ObservationStatus::Unavailable);
         assert_eq!(pack.write_ms.note.as_deref(), Some("dry-run"));
         assert_eq!(unpack.header_ms.status, ObservationStatus::Unavailable);
+        assert_eq!(unpack.frame_read_ms.status, ObservationStatus::Unavailable);
+        assert_eq!(unpack.decode_ms.status, ObservationStatus::Unavailable);
+        assert_eq!(unpack.scatter_ms.status, ObservationStatus::Unavailable);
         assert_eq!(unpack.restore_finalize_ms.note.as_deref(), Some("dry-run"));
     }
 }

@@ -72,5 +72,14 @@ mod tests {
             ),
             crate::harness::Baseline::Tar => record.sfa_stats.is_none(),
         }));
+        assert!(report.records.iter().all(|record| match &record.sfa_stats {
+            Some(SfaCommandStats::Unpack(stats)) => {
+                stats.threads > 0
+                    && stats.phase_breakdown.frame_read_ms.value.is_some()
+                    && stats.phase_breakdown.decode_ms.value.is_some()
+                    && stats.phase_breakdown.scatter_ms.value.is_some()
+            }
+            _ => true,
+        }));
     }
 }

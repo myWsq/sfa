@@ -591,6 +591,7 @@ dependencies = [
  "serde_json",
  "sfa-core",
  "sfa-unixfs",
+ "tempfile",
  "walkdir",
 ]
 
@@ -603,6 +604,7 @@ dependencies = [
  "serde_json",
  "sfa-core",
  "sfa-unixfs",
+ "tempfile",
  "walkdir",
 ]
 
@@ -631,6 +633,7 @@ dependencies = [
  "filetime",
  "nix",
  "rayon",
+ "serde",
  "sfa-core",
  "tempfile",
  "thiserror",

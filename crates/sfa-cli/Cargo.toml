@@ -13,3 +13,6 @@ serde_json.workspace = true
 sfa-core = { path = "../sfa-core" }
 sfa-unixfs = { path = "../sfa-unixfs" }
 walkdir.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

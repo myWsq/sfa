@@ -199,7 +199,13 @@ fn finalize_bundle(
         kind: current.kind,
         flags: 0,
     });
-    bundles.push(current.clone());
+    bundles.push(BundleInput {
+        bundle_id: current.bundle_id,
+        kind: current.kind,
+        raw_len: current.raw_len,
+        parts: std::mem::take(&mut current.parts),
+    });
+    current.raw_len = 0;
 }
 
 #[cfg(test)]

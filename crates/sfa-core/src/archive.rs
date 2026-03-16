@@ -1,6 +1,5 @@
 use std::io::{Read, Write};
 
-use crate::codec;
 use crate::config::{IntegrityMode, PackConfig};
 use crate::format::{
     FrameHeaderV1, HeaderV1, TrailerV1, decode_manifest, encode_manifest, read_header, write_header,
@@ -43,7 +42,8 @@ where
 
     let mut total_raw_bytes = 0u64;
     let mut total_encoded_bytes = 0u64;
-    let mut archive_hash_bytes = Vec::new();
+    let mut archive_hash_bytes =
+        Vec::with_capacity(prepared.header.bundle_count as usize * std::mem::size_of::<u64>());
 
     for frame in frames {
         writer
@@ -93,7 +93,7 @@ impl<R: Read> ArchiveReader<R> {
     pub fn read_manifest(&mut self) -> Result<Manifest> {
         let header = self
             .header
-            .clone()
+            .as_ref()
             .ok_or(Error::InvalidState("header must be read first"))?;
         let mut manifest_bytes = vec![0u8; header.manifest_encoded_len as usize];
         self.reader
@@ -105,7 +105,7 @@ impl<R: Read> ArchiveReader<R> {
     pub fn next_frame(&mut self) -> Result<Option<EncodedFrame>> {
         let header = self
             .header
-            .clone()
+            .as_ref()
             .ok_or(Error::InvalidState("header must be read first"))?;
         if self.frame_index >= header.bundle_count {
             return Ok(None);
@@ -118,14 +118,6 @@ impl<R: Read> ArchiveReader<R> {
         let frame_header = FrameHeaderV1::decode(frame_header_bytes)?;
         let mut payload = vec![0u8; frame_header.encoded_len as usize];
         self.reader.read_exact(&mut payload).map_err(Error::from)?;
-        let decoded =
-            codec::decode_data(header.data_codec, &payload, frame_header.raw_len as usize)?;
-        let expected_hash = integrity::frame_hash(header.frame_hash_algo, &decoded);
-        if expected_hash != frame_header.frame_hash {
-            return Err(Error::FrameHashMismatch {
-                bundle_id: frame_header.bundle_id,
-            });
-        }
         self.frame_index += 1;
         Ok(Some(EncodedFrame {
             header: frame_header,
@@ -136,7 +128,7 @@ impl<R: Read> ArchiveReader<R> {
     pub fn read_trailer(&mut self) -> Result<Option<TrailerV1>> {
         let header = self
             .header
-            .clone()
+            .as_ref()
             .ok_or(Error::InvalidState("header must be read first"))?;
         if !header
             .feature_flags

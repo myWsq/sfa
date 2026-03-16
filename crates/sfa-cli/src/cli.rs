@@ -54,7 +54,7 @@ pub struct PackArgs {
 
 #[derive(Debug, Clone, Args)]
 pub struct UnpackArgs {
-    /// Input archive path.
+    /// Input archive path, or `-` to read from stdin.
     pub input_archive: PathBuf,
     /// Output directory root.
     #[arg(short = 'C', long = "directory", default_value = ".")]

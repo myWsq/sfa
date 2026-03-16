@@ -30,5 +30,6 @@ Each dataset is committed under `tests/fixtures/datasets/<name>/input`, and each
 - Recorded on: macOS `aarch64`
 - Toolchain captured in the JSON metadata: `target/release/sfa-cli`, `/usr/bin/tar` (`bsdtar 3.5.3`), Homebrew `lz4` `1.10.0`, and Homebrew `zstd` `1.5.7`
 - Report fields include command wall-time, SFA internal phase breakdowns, and `wait4/getrusage` CPU / RSS observations for each executed record
+- Unpack records split restore work into `frame_read`, `decode`, `scatter`, and `restore_finalize`; these phase windows are diagnostic and are not expected to sum to total wall-time
 
 Refresh the committed baseline whenever the benchmark runner, default dataset corpus, planner/pipeline behavior, codec integration, or release benchmark environment changes in a way that could invalidate longitudinal comparison.
