@@ -5,7 +5,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 #[derive(Debug, Clone, Parser)]
 #[command(
     name = "sfa",
-    about = "Streaming Folder Archive CLI",
+    about = "Small File Archive CLI",
     version,
     arg_required_else_help = true
 )]

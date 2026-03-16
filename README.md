@@ -1,6 +1,6 @@
 # SFA
 
-SFA（Streaming Folder Archive）是一个面向 Unix 目录树的流式归档格式与工具链。它的目标不是简单替代 `tar`，而是提供一套更适合 manifest-first、顺序读取、完整性校验与性能基线对比的归档方案。
+SFA（Small File Archive）是一个面向 Unix 目录树的归档格式与工具链，针对海量小文件场景做了专门优化。它的目标不是简单替代 `tar`，而是提供一套更适合 manifest-first、顺序读取、完整性校验与性能基线对比的归档方案。
 
 ## 项目状态
 

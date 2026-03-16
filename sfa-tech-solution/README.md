@@ -1,6 +1,6 @@
 # SFA 技术方案包
 
-> 工作名：**SFA（Streaming Folder Archive）**  
+> 工作名：**SFA（Small File Archive）**  
 > 定位：**面向海量小文件场景的流式并行归档格式与工具**  
 > 核心口号：**tar 语义，非 tar 结构**
 
@@ -135,4 +135,3 @@
 - `docs/roadmap.md`
 
 用于开源仓库初始化。
-
