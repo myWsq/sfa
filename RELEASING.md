@@ -1,6 +1,6 @@
 # SFA 发版流程
 
-本文档定义 SFA 仓库当前采用的发版流程。除非后续引入自动发布流水线，否则对外版本均按本文档执行。
+本文档定义 SFA 仓库当前采用的发版流程。对外版本仍以 Git tag 为唯一发布触发器，但 GitHub Release 由 [release workflow](.github/workflows/release.yml) 在 tag 推送后自动完成；只有在 workflow 不可用时才退回手动创建 Release。
 
 ## 适用范围
 
@@ -12,9 +12,9 @@
 
 当前流程不包含：
 
-- 自动化二进制打包与上传
 - crates.io 发布
 - 多平台安装器分发
+- macOS notarization / codesign
 
 ## 发版原则
 
@@ -148,9 +148,30 @@ git push origin main
 git push origin vX.Y.Z
 ```
 
-### 6. 创建 GitHub Release
+推送 `vX.Y.Z` 后，release workflow 会：
 
-在 GitHub 上以 `vX.Y.Z` tag 创建 Release，并附上 release notes。
+- 在对应 tag 上重跑 authoritative release checklist
+- 读取 `release-notes/vX.Y.Z.md`
+- 编译 Linux x86_64、macOS x86_64、macOS arm64 CLI 二进制压缩包
+- 创建或更新 GitHub Release，并附加生成的二进制和校验文件
+
+如果 release workflow 尚未可用，或者需要为一个已经存在的 tag 补发 Release，可以手动触发 `.github/workflows/release.yml` 的 `workflow_dispatch`，并传入目标 tag。
+
+### 6. 确认 GitHub Release
+
+正常情况下，tag push 对应的 release workflow 会自动以 `vX.Y.Z` tag 创建 Release，并附上 `release-notes/vX.Y.Z.md` 的内容。
+同一次 workflow 还会附加：
+
+- `sfa-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz`
+- `sfa-vX.Y.Z-x86_64-apple-darwin.tar.gz`
+- `sfa-vX.Y.Z-aarch64-apple-darwin.tar.gz`
+- 对应的 `.sha256` 校验文件
+
+如果 workflow 不可用，或者需要手动回填，可以执行：
+
+```bash
+gh release create vX.Y.Z --verify-tag --title "sfa vX.Y.Z" --notes-file release-notes/vX.Y.Z.md
+```
 
 建议在 Release 中明确：
 
@@ -193,4 +214,5 @@ git push origin vX.Y.Z
 - [ ] authoritative release checklist 通过
 - [ ] 如涉及协议，spec 与 fixtures 已同步
 - [ ] Git tag 已创建并推送
-- [ ] GitHub Release 已创建
+- [ ] GitHub Release 已由 workflow 创建或手动回填
+- [ ] Linux / macOS release assets 已上传

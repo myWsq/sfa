@@ -1,0 +1,186 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish, for example v0.2.0
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+      notes_file: ${{ steps.meta.outputs.notes_file }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: meta
+        name: Resolve release metadata
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            release_tag="${{ inputs.tag }}"
+          else
+            release_tag="${GITHUB_REF_NAME}"
+          fi
+
+          notes_file="release-notes/${release_tag}.md"
+
+          echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+          echo "notes_file=${notes_file}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout release tag
+        run: |
+          tag="${{ steps.meta.outputs.release_tag }}"
+          git fetch --force origin "refs/tags/${tag}:refs/tags/${tag}"
+          git checkout --detach "refs/tags/${tag}"
+
+      - name: Validate release notes
+        run: |
+          notes_file="${{ steps.meta.outputs.notes_file }}"
+          if [ ! -f "${notes_file}" ]; then
+            echo "Missing release notes file: ${notes_file}" >&2
+            exit 1
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Cargo fmt
+        run: cargo fmt --all --check
+
+      - name: Cargo test
+        run: cargo test --workspace
+
+      - name: Protocol smoke
+        run: bash tests/scripts/run_protocol_smoke.sh
+
+      - name: Streaming smoke
+        run: bash tests/scripts/run_streaming_smoke.sh
+
+      - name: Safety smoke
+        run: bash tests/scripts/run_safety_smoke.sh
+
+      - name: Roundtrip smoke
+        run: bash tests/scripts/run_roundtrip_smoke.sh
+
+      - name: Benchmark dry run
+        run: cargo run -p sfa-bench --bin tar_vs_sfa -- --dry-run --output benches/results/latest.json
+
+  build-assets:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - runner: macos-13
+            target: x86_64-apple-darwin
+          - runner: macos-14
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout release tag
+        run: |
+          tag="${{ needs.verify.outputs.release_tag }}"
+          git fetch --force origin "refs/tags/${tag}:refs/tags/${tag}"
+          git checkout --detach "refs/tags/${tag}"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release --locked -p sfa-cli --target "${{ matrix.target }}"
+
+      - name: Package release archive
+        env:
+          RELEASE_TAG: ${{ needs.verify.outputs.release_tag }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          archive_base="sfa-${RELEASE_TAG}-${TARGET}"
+          package_dir="${RUNNER_TEMP}/${archive_base}"
+          mkdir -p "${package_dir}"
+
+          cp "target/${TARGET}/release/sfa-cli" "${package_dir}/sfa-cli"
+          cp README.md LICENSE "${package_dir}/"
+
+          tar -C "${RUNNER_TEMP}" -czf "${archive_base}.tar.gz" "${archive_base}"
+          shasum -a 256 "${archive_base}.tar.gz" > "${archive_base}.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ matrix.target }}
+          path: |
+            sfa-${{ needs.verify.outputs.release_tag }}-${{ matrix.target }}.tar.gz
+            sfa-${{ needs.verify.outputs.release_tag }}-${{ matrix.target }}.tar.gz.sha256
+
+  publish:
+    runs-on: ubuntu-latest
+    needs:
+      - verify
+      - build-assets
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout release tag
+        run: |
+          tag="${{ needs.verify.outputs.release_tag }}"
+          git fetch --force origin "refs/tags/${tag}:refs/tags/${tag}"
+          git checkout --detach "refs/tags/${tag}"
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.verify.outputs.release_tag }}
+          NOTES_FILE: ${{ needs.verify.outputs.notes_file }}
+        run: |
+          release_name="sfa ${RELEASE_TAG}"
+
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release edit "${RELEASE_TAG}" \
+              --title "${release_name}" \
+              --notes-file "${NOTES_FILE}"
+          else
+            gh release create "${RELEASE_TAG}" \
+              --verify-tag \
+              --title "${release_name}" \
+              --notes-file "${NOTES_FILE}"
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: release-assets-*
+          merge-multiple: true
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.verify.outputs.release_tag }}
+        run: |
+          gh release upload "${RELEASE_TAG}" dist/* --clobber
