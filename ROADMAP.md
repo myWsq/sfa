@@ -6,7 +6,7 @@ Last updated: 2026-03-17
 
 ## Current Status
 
-SFA v1 is under active development. The repository already contains a runnable minimal usable chain, a frozen protocol definition, completed M1 and M2 milestones, and the first phase of M3 work focused on tightening the Unix metadata contract and its verification assets.
+SFA v1 is in stable-release preparation. The repository already contains a runnable minimal usable chain, a frozen protocol definition, completed M0 through M3 milestones for the current stable-v1 scope, and a candidate `main` revision that extends the `v0.3.0` line with additional unpack setup optimization work.
 
 The repository currently provides:
 
@@ -26,10 +26,11 @@ The repository currently provides:
 - A restore path built around `dirfd` / `openat`-style safe I/O and `.sfa-untrusted` emission on `strong` trailer verification failure
 - Expanded canonical golden fixtures and CLI regression coverage as repository-default verification baselines
 
-The next work cycle is currently focused on:
+The current release train is focused on:
 
-- Advancing the first phase of M3 by stabilizing the current Unix metadata contract and verification assets
-- Keeping versioning, release checklist documentation, and release notes aligned with the repository state
+- Preparing the first stable `v1.0.0` release from the current `main` revision
+- Refreshing the committed benchmark baseline and re-running the authoritative release checklist because the candidate includes benchmark-affecting unpack setup changes beyond `v0.3.0`
+- Keeping xattrs, ACLs, special files, and broader Unix extensions explicitly deferred to post-v1 work
 
 ## v1 Goals
 
@@ -49,7 +50,8 @@ The current version does not attempt to cover all Unix extended semantics in one
 | M0 | Protocol freeze | Complete | Freeze the v1 protocol text, commit the first golden fixtures, and record the review outcome |
 | M1 | Minimal usable chain | Complete | Close the MVP into a stable, regression-friendly, CI-ready minimal release candidate |
 | M2 | Performance mainline | Complete | Establish real benchmark datasets and `tar + same codec` baselines with phase-level and resource-level observations |
-| M3 | Unix semantics hardening | In progress | Stabilize the current metadata contract first, then decide the scope of further Unix metadata extensions |
+| M3 | Unix semantics hardening | Complete | Stabilize the current metadata contract for the stable v1 boundary and move broader Unix extensions into post-v1 follow-up |
+| M4 | Post-v1 Unix extensions | Not started | Evaluate xattrs, ACLs, special files, and other broader Unix extensions without changing the frozen v1 contract |
 
 Status meanings:
 
@@ -126,18 +128,13 @@ Closure criteria:
 
 ### M3: Unix Semantics Hardening
 
-Status: `In progress`
+Status: `Complete`
 
-Current scope:
+Delivered:
 
 - Stabilize the current v1 Unix metadata contract, especially the commitment boundary for `mode`, `mtime`, and owner policy
 - Add repository-level verification for metadata roundtrips, owner policy behavior, and existing link / safety scenarios
 - Keep xattrs and ACLs deferred while aligning roadmap, README, and technical design documents with shipped behavior
-
-Follow-up candidates:
-
-- Evaluate xattrs and ACLs if they remain in scope for v1
-- Expand Unix boundary cases and exceptional-path coverage
 
 Closure criteria:
 
@@ -145,18 +142,54 @@ Closure criteria:
 - Repository status documents and technical design documents no longer mark delivered behavior as future work
 - Any broader metadata extension is split into a dedicated OpenSpec change
 
+Closure result:
+
+- The stable v1 metadata boundary is explicit for `mode`, `mtime`, and owner-policy behavior
+- Repository-facing status documents can now treat first-stable-release preparation as the next step instead of continuing to describe M3 as open-ended
+- xattrs, ACLs, special files, and broader Unix extensions remain deferred to post-v1 work
+
+### M4: Post-v1 Unix Extensions
+
+Status: `Not started`
+
+Initial scope:
+
+- Evaluate xattrs and ACLs as dedicated post-v1 work items rather than implicit stable-release blockers
+- Expand Unix boundary cases such as special files and broader metadata coverage only through dedicated OpenSpec changes
+- Decide whether later restore-path and benchmark automation enhancements belong in the same post-v1 milestone or should be split further
+
+Closure criteria:
+
+- Any expanded Unix metadata or special-file surface has dedicated specs, verification assets, and release notes
+- Post-v1 extensions do not redefine the frozen `format-v1` compatibility contract for the first stable release line
+
+## Stable Release Train
+
+Current target: `v1.0.0`
+
+Selected candidate revision:
+
+- The current `main` branch after `v0.3.0`
+- Includes the post-`v0.3.0` unpack directory setup optimization work before the worker pipeline begins
+
+Current release-train blockers:
+
+- Restore release-gate compliance on the selected candidate revision
+- Refresh and validate the committed benchmark baseline because the selected candidate changes benchmark-facing unpack behavior
+- Synchronize version metadata, roadmap state, changelog, release notes, and release guidance around the same `v1.0.0` target
+
 ## Near-Term Priorities
 
 The current recommended next work item is:
 
-`M3: stabilize the Unix metadata contract`
+`v1.0.0: prepare the current main revision as the first stable release candidate`
 
 Suggested scope:
 
-- Deepen verification for owner and metadata restore behavior
-- Keep xattrs and ACLs deferred instead of mixing them into the current change
-- Make metadata roundtrip, owner policy, and existing link / safety scenarios part of auditable repository-level verification
-- Keep the release checklist and benchmark dry run as stable pre-release gates
+- Keep xattrs, ACLs, special files, and broader Unix extensions deferred instead of treating them as stable-release blockers
+- Re-run the authoritative release checklist on the selected candidate revision
+- Refresh `benches/results/baseline-v0.1.0.json` because the candidate includes benchmark-affecting unpack setup changes beyond `v0.3.0`
+- Prepare `v1.0.0` version metadata, changelog, and in-repo release notes for tagging
 
 ## Document Boundaries
 

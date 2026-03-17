@@ -905,8 +905,8 @@ pub(crate) fn materialize_directory_frontiers(
             for chunk in frontier_targets.chunks(chunk_size) {
                 let root_path = root_path.clone();
                 let chunk = chunk.to_vec();
-                handles.push(
-                    scope.spawn(move || -> Result<HashMap<PathBuf, Arc<File>>, UnixFsError> {
+                handles.push(scope.spawn(
+                    move || -> Result<HashMap<PathBuf, Arc<File>>, UnixFsError> {
                         let mut prepared = HashMap::new();
                         for (rel, parent_dir) in chunk {
                             let dir = create_directory_from_parent(
@@ -918,8 +918,8 @@ pub(crate) fn materialize_directory_frontiers(
                             prepared.insert(rel, dir);
                         }
                         Ok(prepared)
-                    }),
-                );
+                    },
+                ));
             }
 
             for handle in handles {
@@ -1333,9 +1333,8 @@ mod tests {
         let root = temp.path().to_path_buf();
         let frontiers = vec![vec![PathBuf::from("a/b")]];
 
-        let err =
-            materialize_directory_frontiers(&root, &frontiers, OverwritePolicy::Replace, 4)
-                .expect_err("missing parent must fail");
+        let err = materialize_directory_frontiers(&root, &frontiers, OverwritePolicy::Replace, 4)
+            .expect_err("missing parent must fail");
 
         match err {
             UnixFsError::InvalidState("missing prepared parent directory during setup") => {}

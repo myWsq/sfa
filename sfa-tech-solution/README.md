@@ -117,7 +117,7 @@
 - 远程断点续传
 - 全量 xattrs / ACL / device file 恢复
 
-当前仓库状态已经进入 M3 的第一阶段：先收口现有 Unix metadata contract 与验证资产，明确 `mode` / `mtime` / owner policy 的 v1 边界，同时继续将 xattrs / ACL 保持 deferred。
+当前仓库状态已经完成 M3 在稳定版 v1 范围内的收口：现有 Unix metadata contract 与验证资产已经对齐，`mode` / `mtime` / owner policy 的 v1 边界已经明确；下一步是围绕当前 `main` 准备首个稳定版 `v1.0.0` 发布，同时继续将 xattrs / ACL 保持 deferred。
 
 ## 7. 文档使用方式
 

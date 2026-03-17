@@ -6,11 +6,11 @@ SFA is not intended to be a drop-in replacement for `tar`. The project focuses o
 
 ## Project Status
 
-SFA is under active development.
+SFA is under active development and is currently in stable-release preparation for its first stable v1 line.
 
 - `format-v1` is frozen and serves as the current compatibility boundary.
-- Milestones M0, M1, and M2 are complete.
-- Current work is focused on M3: tightening the Unix metadata contract and its repository-level verification assets.
+- Milestones M0 through M3 for the current stable-v1 scope are complete.
+- The repository is preparing the first stable `v1.0.0` release from the current `main` revision while keeping xattrs, ACLs, special-file restore, and broader Unix extensions deferred to post-v1 work.
 
 At the repository level, SFA already provides a runnable `pack` / `unpack` chain, canonical golden fixtures, CLI regression coverage, committed benchmark datasets, and machine-readable benchmark baselines.
 

@@ -37,6 +37,33 @@ Do not start the release process until all of the following are true:
 4. The release content has completed code review.
 5. `git status --short` is empty.
 
+## Current Stable Release Train
+
+The current repository release train is preparing the first stable `v1.0.0` release.
+
+- Release class: `major`
+- Candidate revision: the current `main` branch after `v0.3.0`
+- Included post-`v0.3.0` change: unpack directory setup now does more bounded preparation before the worker pipeline begins
+- Extra release-prep requirement: refresh `benches/results/baseline-v0.1.0.json` and validate it with `cargo test -p sfa-bench`
+- Deferred from `v1.0.0`: xattrs, ACLs, special-file restore, broader Unix extensions, non-Unix parity, crates.io distribution, and installer / notarization work
+
+Exact handoff commands for the current stable release train:
+
+```bash
+git status --short
+git push origin main
+git tag -a v1.0.0 -m "sfa v1.0.0"
+git push origin v1.0.0
+gh workflow run release.yml -f tag=v1.0.0
+gh release view v1.0.0
+```
+
+Manual fallback if the workflow cannot publish the release:
+
+```bash
+gh release create v1.0.0 --verify-tag --title "sfa v1.0.0" --notes-file release-notes/v1.0.0.md
+```
+
 ## Standard Release Procedure
 
 ### 1. Confirm the Version Scope
@@ -103,6 +130,8 @@ CARGO_HOME=/tmp/cargo-home cargo build --release -p sfa-cli
 After refreshing the baseline, confirm that `benches/results/baseline-v0.1.0.json` is committed and that `cargo test -p sfa-bench` still validates the asset.
 
 If the release does not change benchmark behavior, datasets, or result schema, the benchmark dry run remains mandatory but a fresh committed baseline is not required.
+
+For the current `v1.0.0` release train, a committed baseline refresh is required because the selected candidate revision includes benchmark-affecting unpack setup changes beyond `v0.3.0`.
 
 If benchmark evidence is part of the release claim, also confirm that the committed baseline includes:
 
