@@ -29,7 +29,7 @@
 满足以下条件后才进入发版：
 
 1. 对应 OpenSpec change 已完成，或本次发版内容在仓库中已有明确结论。
-2. [ROADMAP.md](ROADMAP.md) 中相关里程碑状态已同步。
+2. [ROADMAP.md](ROADMAP.md) 与 [README.md](README.md) 中相关里程碑状态和顶层项目状态已同步。
 3. 如果发版涉及协议或解码行为变化：
    - `spec/format-v1.md` 已更新
    - golden fixtures 已更新，并保持代表性的 canonical corpus 覆盖
@@ -64,7 +64,8 @@ git status --short
 - 根目录 [Cargo.toml](Cargo.toml) 中 `[workspace.package].version`
 - [CHANGELOG.md](CHANGELOG.md)
 - [ROADMAP.md](ROADMAP.md) 中受影响的里程碑状态
-- 如有需要，更新 [README.md](README.md) 中的状态说明
+- [README.md](README.md) 中的状态说明
+- 仓库内的 release notes draft（建议放在 `release-notes/vX.Y.Z.md`）
 
 如果涉及协议或验证资产，还要同步：
 
@@ -87,6 +88,8 @@ bash tests/scripts/run_roundtrip_smoke.sh
 cargo run -p sfa-bench --bin tar_vs_sfa -- --dry-run --output benches/results/latest.json
 ```
 
+以上命令构成当前仓库的 authoritative release checklist。
+
 如果本次发版修改了 benchmark 逻辑、默认 benchmark 数据集、planner / pipeline 参数、codec 集成或 benchmark 支持环境，应额外刷新 committed benchmark baseline，并在 release notes 中说明：
 
 ```bash
@@ -98,6 +101,7 @@ CARGO_HOME=/tmp/cargo-home cargo build --release -p sfa-cli
 ```
 
 刷新后应确认 `benches/results/baseline-v0.1.0.json` 已提交，且 `cargo test -p sfa-bench` 仍能读取并校验该结果资产。
+如果本次发版不涉及 benchmark 行为、默认数据集或结果 schema 的变化，则 benchmark dry-run 仍是必跑项，但不要求额外刷新 committed baseline。
 如果当前发版依赖 benchmark 作为性能证据，还应确认 committed baseline 中：
 
 - `environment.resource_sampler` 与支持环境说明一致
@@ -125,6 +129,8 @@ Compatibility
 Verification
 Known gaps
 ```
+
+建议先在仓库内起草 `release-notes/vX.Y.Z.md`，确认版本摘要、验证结果和已知缺口之后，再复制到 GitHub Release。
 
 ### 5. 创建 tag
 
@@ -157,7 +163,7 @@ git push origin vX.Y.Z
 
 发版完成后，至少检查以下事项：
 
-- [ROADMAP.md](ROADMAP.md) 是否需要更新状态
+- [ROADMAP.md](ROADMAP.md) 与 [README.md](README.md) 是否需要更新状态
 - [CHANGELOG.md](CHANGELOG.md) 是否已开启下一轮 `Unreleased`
 - 若协议有演进，是否需要立新的 OpenSpec change
 
@@ -182,9 +188,9 @@ git push origin vX.Y.Z
 
 - [ ] 版本号已更新
 - [ ] `CHANGELOG.md` 已更新
+- [ ] release notes draft 已整理并与仓库版本一致
 - [ ] `git status --short` 为空
-- [ ] 测试与 smoke checks 通过
+- [ ] authoritative release checklist 通过
 - [ ] 如涉及协议，spec 与 fixtures 已同步
-- [ ] release notes 已整理
 - [ ] Git tag 已创建并推送
 - [ ] GitHub Release 已创建

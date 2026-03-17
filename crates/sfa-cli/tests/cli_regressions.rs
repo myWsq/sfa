@@ -85,7 +85,10 @@ fn unpack_dry_run_with_file_archive_reports_json_stats() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(!out.exists(), "dry-run should not create an output directory");
+    assert!(
+        !out.exists(),
+        "dry-run should not create an output directory"
+    );
 
     let json: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("unpack dry-run json stats");
@@ -144,7 +147,10 @@ fn unpack_without_overwrite_preserves_existing_output() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(fs::read(out.join("dir/hello.txt")).unwrap(), b"stale content");
+    assert_eq!(
+        fs::read(out.join("dir/hello.txt")).unwrap(),
+        b"stale content"
+    );
 }
 
 #[test]
