@@ -1,82 +1,82 @@
-# SFA 发版流程
+# SFA Release Process
 
-本文档定义 SFA 仓库当前采用的发版流程。对外版本仍以 Git tag 为唯一发布触发器，但 GitHub Release 由 [release workflow](.github/workflows/release.yml) 在 tag 推送后自动完成；只有在 workflow 不可用时才退回手动创建 Release。
+This document defines the current release process used by the SFA repository. Git tags remain the source of truth for published versions, while GitHub Releases are normally created and updated by the [release workflow](.github/workflows/release.yml) after a version tag is pushed. Manual GitHub Release creation is only a fallback path.
 
-## 适用范围
+## Scope
 
-当前流程适用于：
+The current process covers:
 
-- 仓库级版本发布
-- Git tag 与 GitHub Release
-- 协议、测试资产、benchmark 基线的发版前检查
+- Repository-level version releases
+- Git tags and GitHub Releases
+- Pre-release validation for protocol behavior, test assets, and benchmark baselines
 
-当前流程不包含：
+The current process does not cover:
 
-- crates.io 发布
-- 多平台安装器分发
-- macOS notarization / codesign
+- crates.io publishing
+- Multi-platform installer distribution
+- macOS notarization or code signing
 
-## 发版原则
+## Release Principles
 
-- 每个对外版本都必须有可追溯的 Git tag
-- 发版内容必须与仓库状态、路线图和协议文档一致
-- 协议相关改动不能只发代码，必须同时更新 spec、fixtures 和验证资产
-- 工作区必须干净；存在未提交或未跟踪变更时不允许发版
-- 发版前必须通过仓库定义的质量闸口
+- Every public release must have a traceable Git tag
+- Release contents must match the repository state, roadmap, and protocol documentation
+- Protocol-sensitive changes must update code, specs, fixtures, and verification assets together
+- The working tree must be clean before a release
+- Every release must pass the repository-defined quality gates
 
-## 发版前提
+## Release Preconditions
 
-满足以下条件后才进入发版：
+Do not start the release process until all of the following are true:
 
-1. 对应 OpenSpec change 已完成，或本次发版内容在仓库中已有明确结论。
-2. [ROADMAP.md](ROADMAP.md) 与 [README.md](README.md) 中相关里程碑状态和顶层项目状态已同步。
-3. 如果发版涉及协议或解码行为变化：
-   - `spec/format-v1.md` 已更新
-   - golden fixtures 已更新，并保持代表性的 canonical corpus 覆盖
-   - 兼容性影响已记录在 release notes 中
-4. 待发布内容已经完成代码 review。
-5. `git status --short` 结果为空，工作区没有未提交或未跟踪变更。
+1. The relevant OpenSpec change is complete, or the release content is otherwise clearly resolved in the repository.
+2. [ROADMAP.md](ROADMAP.md) and [README.md](README.md) reflect the current milestone and top-level project status.
+3. If the release changes protocol behavior or decode semantics:
+   - `spec/format-v1.md` has been updated
+   - Golden fixtures have been updated and still cover a representative canonical corpus
+   - Compatibility impact is described in the release notes
+4. The release content has completed code review.
+5. `git status --short` is empty.
 
-## 标准发版步骤
+## Standard Release Procedure
 
-### 1. 确认版本范围
+### 1. Confirm the Version Scope
 
-首先确认工作区干净：
+Start by confirming that the working tree is clean:
 
 ```bash
 git status --short
 ```
 
-如果输出非空，先整理工作区，再继续发版流程。
+If the output is not empty, stop and clean up the tree before continuing.
 
-明确本次版本属于以下哪类：
+Classify the release as one of:
 
-- `patch`：修复缺陷，不改变预期接口和协议行为
-- `minor`：新增能力，但保持兼容
-- `major`：发生不兼容变更
+- `patch`: defect fixes without changing expected interface or protocol behavior
+- `minor`: new capability with backward compatibility preserved
+- `major`: an incompatible behavior or compatibility change
 
-如果 `format-v1` 仍未冻结，则即使版本号按 SemVer 递增，也必须在 release notes 中明确说明协议兼容性状态。
+If `format-v1` is not frozen for the relevant release line, the release notes must explicitly state that protocol compatibility remains in flux even if the version number follows SemVer progression.
 
-### 2. 更新版本与文档
+### 2. Update Versioned Materials
 
-至少同步以下内容：
+At minimum, keep the following in sync:
 
-- 根目录 [Cargo.toml](Cargo.toml) 中 `[workspace.package].version`
+- `[workspace.package].version` in [Cargo.toml](Cargo.toml)
 - [CHANGELOG.md](CHANGELOG.md)
-- [ROADMAP.md](ROADMAP.md) 中受影响的里程碑状态
-- [README.md](README.md) 中的状态说明
-- 仓库内的 release notes draft（建议放在 `release-notes/vX.Y.Z.md`）
+- Relevant milestone state in [ROADMAP.md](ROADMAP.md)
+- Top-level status wording in [README.md](README.md)
+- The in-repo release notes file, usually `release-notes/vX.Y.Z.md`
 
-如果涉及协议或验证资产，还要同步：
+If the release affects protocol behavior or verification assets, also update:
 
 - [spec/format-v1.md](spec/format-v1.md)
 - [spec/verification-and-benchmark.md](spec/verification-and-benchmark.md)
-- `tests/fixtures/` 下对应样例
-- [tests/golden/README.md](tests/golden/README.md) 与每个 golden fixture README 的覆盖说明
+- The affected fixtures under `tests/fixtures/`
+- [tests/golden/README.md](tests/golden/README.md) and any relevant fixture README coverage notes
 
-### 3. 执行质量闸口
+### 3. Run the Quality Gates
 
-发版前至少执行以下命令：
+Before releasing, run at least:
 
 ```bash
 cargo fmt --all --check
@@ -88,9 +88,9 @@ bash tests/scripts/run_roundtrip_smoke.sh
 cargo run -p sfa-bench --bin tar_vs_sfa -- --dry-run --output benches/results/latest.json
 ```
 
-以上命令构成当前仓库的 authoritative release checklist。
+These commands form the repository's authoritative release checklist.
 
-如果本次发版修改了 benchmark 逻辑、默认 benchmark 数据集、planner / pipeline 参数、codec 集成或 benchmark 支持环境，应额外刷新 committed benchmark baseline，并在 release notes 中说明：
+If the release changes benchmark logic, default datasets, planner or pipeline behavior, codec integration, or the benchmark support environment, refresh the committed benchmark baseline as well and describe that refresh in the release notes:
 
 ```bash
 CARGO_HOME=/tmp/cargo-home cargo build --release -p sfa-cli
@@ -100,119 +100,124 @@ CARGO_HOME=/tmp/cargo-home cargo build --release -p sfa-cli
   --output benches/results/baseline-v0.1.0.json
 ```
 
-刷新后应确认 `benches/results/baseline-v0.1.0.json` 已提交，且 `cargo test -p sfa-bench` 仍能读取并校验该结果资产。
-如果本次发版不涉及 benchmark 行为、默认数据集或结果 schema 的变化，则 benchmark dry-run 仍是必跑项，但不要求额外刷新 committed baseline。
-如果当前发版依赖 benchmark 作为性能证据，还应确认 committed baseline 中：
+After refreshing the baseline, confirm that `benches/results/baseline-v0.1.0.json` is committed and that `cargo test -p sfa-bench` still validates the asset.
 
-- `environment.resource_sampler` 与支持环境说明一致
-- 每条执行记录都包含命令 wall-time
-- `sfa` 记录包含阶段级 `sfa_stats`
-- 支持环境下的记录包含 `user_cpu_ms`、`system_cpu_ms` 和 `max_rss_kib`
-- unpack `sfa_stats` 使用 `header`、`manifest`、`frame_read`、`decode`、`scatter`、`restore_finalize` 字段，而不是旧的 `decode_and_scatter`
-- 如果本次发版涉及 unpack pipeline 或 `--threads` 语义，应确认结果资产保留了有效线程数，并在说明中指出 unpack split phases 属于并行诊断窗口、不是可直接求和的总账
+If the release does not change benchmark behavior, datasets, or result schema, the benchmark dry run remains mandatory but a fresh committed baseline is not required.
 
-### 4. 整理 release notes
+If benchmark evidence is part of the release claim, also confirm that the committed baseline includes:
 
-每次发版的 release notes 至少应覆盖：
+- `environment.resource_sampler` aligned with the documented support environment
+- Command wall-time for each execution record
+- Phase-level `sfa_stats` for SFA runs
+- `user_cpu_ms`, `system_cpu_ms`, and `max_rss_kib` where the support environment provides them
+- Unpack `sfa_stats` fields named `header`, `manifest`, `frame_read`, `decode`, `scatter`, and `restore_finalize`, rather than the older `decode_and_scatter`
+- A preserved effective thread count when the release affects unpack pipeline behavior or `--threads` semantics
 
-- 本次版本摘要
-- 主要新增能力或修复
-- 是否涉及协议变化
-- 验证结果摘要
-- 已知限制或后续工作
+When documenting unpack timings, treat split unpack phases as diagnostic windows in a parallel pipeline rather than as values that must sum directly to total wall-time.
 
-推荐结构：
+### 4. Prepare Release Notes
+
+Each release notes file should cover at least:
+
+- A short release summary
+- Major additions or fixes
+- Whether protocol behavior changed
+- Verification status
+- Known limitations or follow-up work
+
+Recommended structure:
 
 ```text
 Highlights
 Compatibility
 Verification
-Known gaps
+Known Gaps
 ```
 
-建议先在仓库内起草 `release-notes/vX.Y.Z.md`，确认版本摘要、验证结果和已知缺口之后，再复制到 GitHub Release。
+Prepare `release-notes/vX.Y.Z.md` in the repository first, verify that the summary and validation statements match the repository state, and then publish that file as the GitHub Release body.
 
-### 5. 创建 tag
+### 5. Create and Push the Tag
 
-在主分支内容确认无误后创建版本 tag：
+Once the main branch content is confirmed, create the version tag:
 
 ```bash
 git tag -a vX.Y.Z -m "sfa vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-如果本次发版需要同时推送主分支：
+If the release also requires pushing the branch tip:
 
 ```bash
 git push origin main
 git push origin vX.Y.Z
 ```
 
-推送 `vX.Y.Z` 后，release workflow 会：
+After `vX.Y.Z` is pushed, the release workflow will:
 
-- 在对应 tag 上重跑 authoritative release checklist
-- 读取 `release-notes/vX.Y.Z.md`
-- 编译 Linux x86_64、macOS x86_64、macOS arm64 CLI 二进制压缩包
-- 创建或更新 GitHub Release，并附加生成的二进制和校验文件
+- Re-run the authoritative release checklist on the tagged revision
+- Read `release-notes/vX.Y.Z.md`
+- Build CLI archives for Linux `x86_64`, macOS `x86_64`, and macOS `arm64`
+- Create or update the GitHub Release and attach the generated archives and checksum files
 
-如果 release workflow 尚未可用，或者需要为一个已经存在的 tag 补发 Release，可以手动触发 `.github/workflows/release.yml` 的 `workflow_dispatch`，并传入目标 tag。
+If the release workflow is not yet available, or if a Release must be backfilled for an existing tag, manually trigger `.github/workflows/release.yml` with `workflow_dispatch` and pass the tag name.
 
-### 6. 确认 GitHub Release
+### 6. Confirm the GitHub Release
 
-正常情况下，tag push 对应的 release workflow 会自动以 `vX.Y.Z` tag 创建 Release，并附上 `release-notes/vX.Y.Z.md` 的内容。
-同一次 workflow 还会附加：
+Under normal conditions, the tag-triggered release workflow will publish the GitHub Release for `vX.Y.Z` using the contents of `release-notes/vX.Y.Z.md`.
+
+The same workflow also uploads:
 
 - `sfa-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz`
 - `sfa-vX.Y.Z-x86_64-apple-darwin.tar.gz`
 - `sfa-vX.Y.Z-aarch64-apple-darwin.tar.gz`
-- 对应的 `.sha256` 校验文件
+- Matching `.sha256` checksum files
 
-如果 workflow 不可用，或者需要手动回填，可以执行：
+If the workflow cannot be used, fall back to:
 
 ```bash
 gh release create vX.Y.Z --verify-tag --title "sfa vX.Y.Z" --notes-file release-notes/vX.Y.Z.md
 ```
 
-建议在 Release 中明确：
+The public release should make clear:
 
-- 当前协议是否已冻结
-- 推荐使用场景
-- 与上一版本相比的兼容性变化
-- 对应的路线图阶段
+- Whether the protocol is frozen
+- Recommended use cases
+- Compatibility changes relative to the previous version
+- The roadmap stage represented by the release
 
-### 7. 发版后收尾
+### 7. Post-Release Follow-Up
 
-发版完成后，至少检查以下事项：
+After the release is published, check:
 
-- [ROADMAP.md](ROADMAP.md) 与 [README.md](README.md) 是否需要更新状态
-- [CHANGELOG.md](CHANGELOG.md) 是否已开启下一轮 `Unreleased`
-- 若协议有演进，是否需要立新的 OpenSpec change
+- Whether [ROADMAP.md](ROADMAP.md) and [README.md](README.md) need status updates
+- Whether [CHANGELOG.md](CHANGELOG.md) should reopen the next `Unreleased` section
+- Whether protocol evolution requires a new OpenSpec change
 
-## 协议相关发版的额外要求
+## Additional Requirements for Protocol-Sensitive Releases
 
-以下类型的改动必须视为协议相关发版：
+Treat the following as protocol-sensitive changes:
 
-- header、manifest、frame、trailer 结构变化
-- codec / integrity 字段含义变化
-- 解码器容错或校验语义变化
-- 影响 golden fixture 的任何改动
+- Any change to header, manifest, frame, or trailer structure
+- Any change to codec or integrity field semantics
+- Any change to decoder tolerance or validation behavior
+- Any change that affects golden fixtures
 
-这类发版必须额外满足：
+These releases must additionally satisfy:
 
-- `spec/format-v1.md` 与实现一致
-- golden fixture、dump 输出与 fixture README 覆盖说明已更新
-- release notes 中明确兼容性影响
+- `spec/format-v1.md` matches the implementation
+- Golden fixtures, dump outputs, and fixture README coverage notes are updated
+- The release notes explicitly describe compatibility impact
 
-## 最小发版清单
+## Minimal Release Checklist
 
-发版前建议逐项确认：
+Before publishing, confirm:
 
-- [ ] 版本号已更新
-- [ ] `CHANGELOG.md` 已更新
-- [ ] release notes draft 已整理并与仓库版本一致
-- [ ] `git status --short` 为空
-- [ ] authoritative release checklist 通过
-- [ ] 如涉及协议，spec 与 fixtures 已同步
-- [ ] Git tag 已创建并推送
-- [ ] GitHub Release 已由 workflow 创建或手动回填
-- [ ] Linux / macOS release assets 已上传
+- [ ] Version metadata has been updated
+- [ ] [CHANGELOG.md](CHANGELOG.md) has been updated
+- [ ] The release notes file matches the version and repository state
+- [ ] `git status --short` is empty
+- [ ] The authoritative release checklist has passed
+- [ ] Specs and fixtures are synchronized when the release affects protocol behavior
+- [ ] The Git tag has been created and pushed
+- [ ] The GitHub Release has been created by the workflow or by manual fallback
+- [ ] Linux and macOS release assets have been uploaded
