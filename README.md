@@ -1,131 +1,149 @@
 # SFA
 
-SFA（Small File Archive）是一个面向 Unix 目录树的归档格式与工具链，针对海量小文件场景做了专门优化。它的目标不是简单替代 `tar`，而是提供一套更适合 manifest-first、顺序读取、完整性校验与性能基线对比的归档方案。
+SFA, short for Small File Archive, is a manifest-first archive format and Rust toolchain for Unix directory trees with many small files. It is designed for deterministic scanning, sequential reads, integrity validation, and benchmarkable comparisons against `tar` with the same codec settings.
 
-## 项目状态
+SFA is not intended to be a drop-in replacement for `tar`. The project focuses on a narrower problem: reliable local archiving and restore workflows for Unix-like directory trees where metadata, ordering, and small-file behavior matter.
 
-当前项目处于 `开发中` 状态，仓库已经具备可运行的 v1 最小可用链路，`format-v1` 协议已经冻结，M1 / M2 里程碑已完成，当前正在收口 M3 的 Unix metadata contract。
+## Project Status
 
-这意味着：
+SFA is under active development.
 
-- `sfa pack` / `sfa unpack` 已可运行
-- 主要主链路已经存在并有测试覆盖
-- `.sfa` v1 的协议边界、canonical golden fixture 和冻结评审记录已经提交
-- 当前已经具备 committed benchmark dataset、machine-readable baseline，以及阶段级/资源级 benchmark 观测
-- expanded canonical golden corpus 与 CLI 行为回归已经进入仓库基线；当前 M3 第一阶段聚焦收口 `mode` / `mtime` / owner policy contract 与验证资产，并继续将 xattrs / ACL 保持 deferred
+- `format-v1` is frozen and serves as the current compatibility boundary.
+- Milestones M0, M1, and M2 are complete.
+- Current work is focused on M3: tightening the Unix metadata contract and its repository-level verification assets.
 
-项目阶段和里程碑见 [ROADMAP.md](ROADMAP.md)。
+At the repository level, SFA already provides a runnable `pack` / `unpack` chain, canonical golden fixtures, CLI regression coverage, committed benchmark datasets, and machine-readable benchmark baselines.
 
-## 当前能力
+For milestone details and current priorities, see [ROADMAP.md](ROADMAP.md).
 
-- `sfa pack` / `sfa unpack` 端到端归档与恢复
-- manifest-first 的 `.sfa` 结构：header、manifest、frame、optional trailer
-- `lz4`、`zstd` 编解码支持
-- 确定性目录扫描、稳定 bundle 规划与顺序读写
-- regular file、directory、symlink、hardlink 支持
-- regular file 与 directory 默认恢复 `mode` / `mtime`，archive manifest 持续记录 `uid` / `gid`
-- owner restore 仍为 opt-in 路径，只有显式请求时才会尝试应用 stored `uid` / `gid`，且仍受 root 权限约束
-- 完整性校验、路径安全检查与基础损坏检测
-- roundtrip、streaming、corruption、safety 测试框架
-- `sfa pack` / `sfa unpack` 的 machine-readable stats 输出（`--stats-format json`）
-- `tar + same codec` benchmark harness
-- committed benchmark datasets 与 `benches/results/baseline-v0.1.0.json` 基线结果
-- benchmark report 中的命令 wall-time、SFA phase breakdown，以及支持环境下的 CPU / RSS 资源观测
-- `unpack --threads` 会进入真实的 bundle 级解包 worker 调度，unpack JSON stats 会拆分 `frame_read` / `decode` / `scatter` / `restore_finalize`
-- `unpack_reader_to_dir<R: Read>` 公开入口，以及 CLI `sfa unpack -` 从 `stdin` 解包
-- 基于 `dirfd/openat` 风格的 restore 路径解析与对象创建，不再依赖 path-string join 作为主恢复路径
-- `strong` trailer 校验失败时会在输出根写入 `.sfa-untrusted`
+## Features
 
-## 当前不承诺的范围
+- End-to-end `sfa pack` and `sfa unpack` workflows for Unix-like directory trees
+- Manifest-first `.sfa` layout with header, manifest, frames, and an optional trailer
+- `lz4` and `zstd` data codec support
+- Deterministic directory scanning and stable bundle planning
+- Sequential archive read/write path without seek-dependent restore logic
+- Support for regular files, directories, symlinks, and hardlinks
+- Default restore of `mode` and `mtime` for regular files and directories
+- Archive-side recording of `uid` and `gid`, with explicit opt-in owner restore policy
+- Path safety checks, integrity validation, and basic corruption detection
+- Machine-readable command stats via `--stats-format json`
+- Benchmarks against `tar` with the same codec configuration
+- Repository-traceable benchmark datasets and committed baseline results
+- Safe restore path built around `dirfd` / `openat`-style object creation
+- `.sfa-untrusted` marker emission when `strong` trailer verification fails during restore
 
-- 全量 Unix 扩展语义，例如 xattrs / ACL / device file restore
-- 非 Unix 平台上的完全一致行为
-- 已发布的安装包或 crates.io 分发流程
+## Current Scope and Non-Goals
 
-## 快速开始
+SFA currently does not promise:
 
-环境要求：
+- Full Unix extended metadata coverage such as xattrs, ACLs, or device file restore
+- Fully equivalent behavior on non-Unix platforms
+- crates.io distribution
+- Installer-style distribution, macOS notarization, or code signing
 
-- Rust `1.85` 或更高版本
-- Unix-like 环境
+## Installation
 
-构建 CLI：
+### Build From Source
+
+Requirements:
+
+- Rust `1.85` or newer
+- A Unix-like environment
+
+Build the CLI:
 
 ```bash
 cargo build --release -p sfa-cli
 ```
 
-打包目录：
+The release binary is produced at `target/release/sfa-cli`.
+
+### GitHub Release Archives
+
+GitHub Releases are intended to publish prebuilt CLI archives for:
+
+- Linux `x86_64`
+- macOS `x86_64`
+- macOS `arm64`
+
+Each archive contains the `sfa-cli` binary together with `README.md` and `LICENSE`.
+
+## Quick Start
+
+Create an archive:
 
 ```bash
-cargo run -p sfa-cli -- pack ./input ./archive.sfa --codec zstd --integrity strong
+./target/release/sfa-cli pack ./input ./archive.sfa --codec zstd --integrity strong
 ```
 
-解包归档：
+Extract an archive:
 
 ```bash
-cargo run -p sfa-cli -- unpack ./archive.sfa -C ./restore
+./target/release/sfa-cli unpack ./archive.sfa -C ./restore
 ```
 
-从 `stdin` 解包：
+Extract from standard input:
 
 ```bash
-cat ./archive.sfa | cargo run -p sfa-cli -- unpack - -C ./restore
+cat ./archive.sfa | ./target/release/sfa-cli unpack - -C ./restore
 ```
 
-运行测试：
+Emit machine-readable stats:
 
 ```bash
+./target/release/sfa-cli pack ./input ./archive.sfa --stats-format json
+```
+
+## Verification
+
+The repository keeps a release-grade verification checklist. The current authoritative checks are:
+
+```bash
+cargo fmt --all --check
 cargo test --workspace
 bash tests/scripts/run_protocol_smoke.sh
 bash tests/scripts/run_streaming_smoke.sh
 bash tests/scripts/run_safety_smoke.sh
 bash tests/scripts/run_roundtrip_smoke.sh
+cargo run -p sfa-bench --bin tar_vs_sfa -- --dry-run --output benches/results/latest.json
 ```
 
-## 仓库结构
+See [RELEASING.md](RELEASING.md) for the release process and quality gates.
 
-- `crates/sfa-core`：归档格式、codec、integrity、planner、顺序 reader
-- `crates/sfa-unixfs`：Unix 文件系统扫描、打包与恢复实现
-- `crates/sfa-cli`：命令行入口
-- `crates/sfa-bench`：benchmark 与 fixture dump 工具
-- `spec/`：冻结后的协议与验证规范
-- `tests/`：回归测试、fixture 与 smoke scripts
-- `sfa-tech-solution/`：当前技术方案文档
-- `openspec/`：change proposal、design 与 task 拆解
+## Repository Layout
 
-## 文档导航
+- `crates/sfa-core`: archive format, codecs, integrity, planning, and ordered readers
+- `crates/sfa-unixfs`: Unix filesystem scan, archive, and restore implementation
+- `crates/sfa-cli`: command-line entry point
+- `crates/sfa-bench`: benchmark runner and fixture dump tooling
+- `spec/`: protocol and verification specifications
+- `tests/`: fixtures, smoke scripts, and repository-level regression assets
+- `release-notes/`: release note drafts kept in-repo
+- `sfa-tech-solution/`: implementation and design background documents
+- `openspec/`: change proposals, design notes, and task breakdowns
 
-- [ROADMAP.md](ROADMAP.md)：仓库级路线图与项目状态
-- [RELEASING.md](RELEASING.md)：发版流程与质量闸口
-- [CHANGELOG.md](CHANGELOG.md)：版本变更记录
-- [spec/README.md](spec/README.md)：协议与验证规范入口
-- [spec/format-v1-freeze-review.md](spec/format-v1-freeze-review.md)：v1 协议冻结评审记录
-- [sfa-tech-solution/README.md](sfa-tech-solution/README.md)：技术方案总览
+## Documentation
 
-## 发版
+- [ROADMAP.md](ROADMAP.md): milestone status and short-term priorities
+- [RELEASING.md](RELEASING.md): release checklist and GitHub release process
+- [CHANGELOG.md](CHANGELOG.md): repository-level change history
+- [spec/README.md](spec/README.md): protocol and verification entry point
+- [spec/format-v1-freeze-review.md](spec/format-v1-freeze-review.md): protocol freeze review record
+- [sfa-tech-solution/README.md](sfa-tech-solution/README.md): broader technical solution overview
 
-当前仓库采用手动发版流程：
+## Contributing
 
-- 使用 Git tag 标记版本
-- 在 GitHub 上创建对应 Release
-- 以仓库中的 `cargo fmt --all --check`、测试、smoke checks、benchmark dry-run 和按需刷新的 committed benchmark baseline 作为发版前质量闸口
-- committed baseline 在支持环境下记录 `wait4/getrusage` 资源观测和 SFA 内部阶段统计，便于解释性能回归
-- unpack 阶段统计是面向并行流水线的诊断窗口，不要求简单相加等于总 wall-time
-- `strong` trailer 校验失败时，输出根会留下 `.sfa-untrusted` 作为“不可信恢复结果”标记
+Contributions are welcome, but larger changes should start from the repository's current roadmap and specification boundary.
 
-具体步骤见 [RELEASING.md](RELEASING.md)。
-
-## 贡献
-
-当前仓库已进入 M3 metadata contract 收口阶段。提交较大改动前，建议先对照：
+Before opening a substantial change, review:
 
 - [ROADMAP.md](ROADMAP.md)
 - [spec/README.md](spec/README.md)
 - [sfa-tech-solution/README.md](sfa-tech-solution/README.md)
 
-如果改动涉及协议、fixture 或 benchmark 基线，优先保持文档、测试资产与实现同步更新。
+If your change affects the archive format, fixtures, benchmark baselines, or restore semantics, keep the implementation, specs, and verification assets in sync.
 
-## 许可
+## License
 
-本项目采用 MIT License，详见 [LICENSE](LICENSE)。
+SFA is released under the MIT License. See [LICENSE](LICENSE).
