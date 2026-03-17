@@ -74,8 +74,10 @@ Each archive contains the `sfa-cli` binary together with `README.md` and `LICENS
 Create an archive:
 
 ```bash
-./target/release/sfa-cli pack ./input ./archive.sfa --codec zstd --integrity strong
+./target/release/sfa-cli pack ./input ./archive.sfa --integrity strong
 ```
+
+By default, `sfa pack` uses `zstd` data frames at level `-3`.
 
 Extract an archive:
 

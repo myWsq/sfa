@@ -296,17 +296,14 @@ fn unpack_reader_to_dir_internal<R: Read>(
         }
     }
 
-    let regular_file_paths = prepare_regular_files(
-        &manifest,
-        &restore_targets,
-        &mut restorer,
-        output_dir,
-        diagnostics.as_deref(),
-    )?;
+    let regular_file_paths = prepare_regular_files(&manifest, &restore_targets, &mut restorer)?;
     let single_extent_regular_entries = regular_single_extent_entries(&manifest);
     let bundle_extents = group_extents_by_bundle(&manifest);
+    let prepared_directories = restorer.take_prepared_directories();
     let file_writer = ConcurrentFileWriter::new(
+        output_dir.to_path_buf(),
         regular_file_paths,
+        prepared_directories,
         restore_policy.overwrite,
         restore_policy.restore_owner,
         restore_policy.max_open_files,
@@ -561,11 +558,8 @@ fn prepare_regular_files(
     manifest: &sfa_core::Manifest,
     restore_targets: &[RestoreTarget],
     restorer: &mut LocalRestorer,
-    output_dir: &Path,
-    diagnostics: Option<&UnpackDiagnosticsCollector>,
 ) -> Result<HashMap<u32, PreparedRegularFile>, UnixFsError> {
     let mut regular_paths = HashMap::new();
-    let mut dir_cache = HashMap::new();
 
     for (entry_id, entry) in manifest.entries.iter().enumerate() {
         if !matches!(entry.kind, CoreEntryKind::Regular) {
@@ -578,8 +572,7 @@ fn prepare_regular_files(
             restorer.finalize_entry(target)?;
         } else {
             let path = restorer.prepare_regular_path(target)?;
-            let descriptor =
-                prepare_regular_descriptor(output_dir, &path, &mut dir_cache, diagnostics)?;
+            let descriptor = prepare_regular_descriptor(&path)?;
             regular_paths.insert(target.entry_id, descriptor);
         }
     }
@@ -949,7 +942,7 @@ mod tests {
 
     use super::{
         UNTRUSTED_MARKER_NAME, UnpackProbe, pack_directory, unpack_archive,
-        unpack_archive_internal, unpack_reader_to_dir,
+        unpack_archive_internal, unpack_archive_with_diagnostics, unpack_reader_to_dir,
     };
 
     struct FragmentedReader {
@@ -1014,7 +1007,7 @@ mod tests {
         let config = PackConfig {
             codec: header.data_codec,
             manifest_codec: header.manifest_codec,
-            compression_level: None,
+            compression_level: PackConfig::default().compression_level,
             threads: usize::from(header.suggested_parallelism.max(1)),
             bundle_target_bytes: header.bundle_target_bytes,
             small_file_threshold: header.small_file_threshold,
@@ -1289,6 +1282,66 @@ mod tests {
                 .value
                 .unwrap_or_default()
                 > 0
+        );
+    }
+
+    #[test]
+    fn unpack_small_file_workload_keeps_setup_and_scatter_diagnostics_auditable() {
+        let src = TempDir::new().unwrap();
+        let dst = TempDir::new().unwrap();
+        let archive = src.path().join("sample.sfa");
+
+        for dir_idx in 0..48 {
+            let dir = src.path().join(format!("pkg-{dir_idx:03}/nested"));
+            fs::create_dir_all(&dir).unwrap();
+            for file_idx in 0..8 {
+                let path = dir.join(format!("file-{file_idx:02}.txt"));
+                let payload = format!("pkg={dir_idx};file={file_idx};{}\n", "x".repeat(160));
+                fs::write(path, payload).unwrap();
+            }
+        }
+
+        let pack_config = PackConfig {
+            codec: sfa_core::config::DataCodec::Zstd,
+            bundle_target_bytes: 1024,
+            small_file_threshold: 4096,
+            ..PackConfig::default()
+        };
+        let pack_stats = pack_directory(src.path(), &archive, &pack_config).unwrap();
+        assert!(pack_stats.bundle_count > 1);
+
+        let unpack_config = UnpackConfig {
+            threads: Some(4),
+            ..UnpackConfig::default()
+        };
+        let out = dst.path().join("out");
+        let (unpack_stats, diagnostics) =
+            unpack_archive_with_diagnostics(&archive, &out, &unpack_config).unwrap();
+
+        assert_eq!(unpack_stats.threads, 4);
+        assert_eq!(
+            diagnostics.pipeline.bundles_observed,
+            unpack_stats.bundle_count
+        );
+        assert_eq!(
+            diagnostics.pipeline.decode_dispatch_wait_count,
+            unpack_stats.bundle_count
+        );
+        assert!(diagnostics.scatter.dir_cache_hits > 0);
+        assert!(diagnostics.scatter.dir_cache_hits + diagnostics.scatter.dir_cache_misses > 0);
+        assert!(diagnostics.scatter.file_open_ns > 0);
+        assert!(diagnostics.scatter.extents_written > 0);
+        assert!(
+            unpack_stats
+                .phase_breakdown
+                .scatter_ms
+                .value
+                .unwrap_or_default()
+                > 0
+        );
+        assert_eq!(
+            fs::read_to_string(out.join("pkg-000/nested/file-00.txt")).unwrap(),
+            format!("pkg={};file={};{}\n", 0, 0, "x".repeat(160))
         );
     }
 

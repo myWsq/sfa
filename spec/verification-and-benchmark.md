@@ -29,11 +29,23 @@ For unpack, the split `phase_breakdown` fields remain diagnostic windows for a p
 When `sfa unpack` is run with an explicit `--threads` override, the resulting stats and benchmark records should preserve that effective worker count for later comparison.
 Real-world thread sweeps on large small-file corpora remain diagnostic evidence, not correctness proofs; when they regress against the previous known baseline, keep the results for analysis and do not silently treat the change as performance-accepted.
 
+For setup-vs-scatter diagnosis on small-file workloads, use a representative temporary corpus rather than relying only on the tiny committed fixtures. One reproducible pattern is to copy `tests/fixtures/datasets/small-text/input` many times into a temporary tree, pack it with a small `--bundle-target-bytes` value so multiple bundles are produced, and then compare `sfa unpack --threads 1` against higher thread counts with `SFA_UNPACK_DIAGNOSTICS_JSON` enabled. On that workload:
+- `wall_breakdown.setup` explains how much time remains serial before workers start.
+- `phase_breakdown.scatter` explains worker busy time, which can overlap across threads.
+- diagnostics fields such as `directory_open_ns`, `file_open_ns`, and `write_ns` explain whether the hotspot is dominated by filesystem syscall work rather than decode.
+- after setup-side directory prewarming, `directory_open_ns` may legitimately fall to zero; use `dir_cache_hits`/`dir_cache_misses` together with `file_open_ns` to understand whether scatter is still paying for parent-directory discovery.
+
 Recommended commands:
 
 ```bash
 ./benches/scripts/run_tar_vs_sfa.sh
 ./benches/scripts/run_tar_vs_sfa.sh --execute --sfa-bin target/release/sfa-cli --output benches/results/baseline-v0.1.0.json
+
+tmp_root="$(mktemp -d)"
+for i in $(seq -w 1 200); do cp -R tests/fixtures/datasets/small-text/input "$tmp_root/case-$i"; done
+cargo run -p sfa-cli -- pack "$tmp_root" /tmp/sfa-smallfiles.zstd.sfa --codec zstd --bundle-target-bytes 65536 --stats-format json
+SFA_UNPACK_DIAGNOSTICS_JSON=/tmp/diag-t1.json cargo run -p sfa-cli -- unpack /tmp/sfa-smallfiles.zstd.sfa -C /tmp/out-t1 --threads 1 --stats-format json
+SFA_UNPACK_DIAGNOSTICS_JSON=/tmp/diag-t8.json cargo run -p sfa-cli -- unpack /tmp/sfa-smallfiles.zstd.sfa -C /tmp/out-t8 --threads 8 --stats-format json
 ```
 
 Refresh the committed benchmark baseline when the benchmark runner, default datasets, planner/pipeline behavior, codec integration, or supported benchmark environment changes materially.

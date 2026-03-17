@@ -63,7 +63,6 @@ impl ArchiveService for RealArchiveService {
         if !req.dry_run {
             let config = PackConfig {
                 codec: map_codec(req.codec),
-                compression_level: None,
                 threads: req.threads,
                 bundle_target_bytes: req.bundle_target_bytes,
                 small_file_threshold: req.small_file_threshold,
@@ -152,7 +151,7 @@ impl ArchiveService for RealArchiveService {
         let codec = header
             .as_ref()
             .map(map_archive_codec)
-            .unwrap_or(DataCodec::Lz4);
+            .unwrap_or(DataCodec::Zstd);
         let unavailable_note = "dry-run does not measure execution phases";
         Ok(UnpackStats {
             codec: codec.as_str().to_string(),

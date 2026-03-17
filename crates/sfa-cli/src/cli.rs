@@ -27,7 +27,7 @@ pub struct PackArgs {
     /// Output archive path (.sfa).
     pub output_archive: PathBuf,
     /// Compression codec.
-    #[arg(long, value_enum, default_value_t = DataCodec::Lz4)]
+    #[arg(long, value_enum, default_value_t = DataCodec::Zstd)]
     pub codec: DataCodec,
     /// Worker thread count.
     #[arg(long, default_value_t = default_threads())]

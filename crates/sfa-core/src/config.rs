@@ -128,9 +128,9 @@ pub struct PackConfig {
 impl Default for PackConfig {
     fn default() -> Self {
         Self {
-            codec: DataCodec::Lz4,
+            codec: DataCodec::Zstd,
             manifest_codec: ManifestCodec::Zstd,
-            compression_level: None,
+            compression_level: Some(-3),
             threads: std::thread::available_parallelism()
                 .map(|value| value.get())
                 .unwrap_or(1),
@@ -139,6 +139,19 @@ impl Default for PackConfig {
             integrity: IntegrityMode::Fast,
             preserve_owner: false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DataCodec, PackConfig};
+
+    #[test]
+    fn pack_config_defaults_to_zstd_at_negative_three() {
+        let config = PackConfig::default();
+
+        assert_eq!(config.codec, DataCodec::Zstd);
+        assert_eq!(config.compression_level, Some(-3));
     }
 }
 

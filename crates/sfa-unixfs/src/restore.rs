@@ -15,7 +15,7 @@ use std::fs::{self, File};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::FileExt;
 use std::path::{Component, Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,6 +88,7 @@ pub struct LocalRestorer {
     created_files: HashSet<u32>,
     open_order: VecDeque<u32>,
     dir_finalize_order: Vec<RestoreTarget>,
+    prepared_directories: HashMap<PathBuf, Arc<File>>,
 }
 
 impl LocalRestorer {
@@ -100,6 +101,7 @@ impl LocalRestorer {
             created_files: HashSet::new(),
             open_order: VecDeque::new(),
             dir_finalize_order: Vec::new(),
+            prepared_directories: HashMap::new(),
         }
     }
 
@@ -145,6 +147,10 @@ impl LocalRestorer {
         Ok(target.relative_path.clone())
     }
 
+    pub fn take_prepared_directories(&mut self) -> HashMap<PathBuf, Arc<File>> {
+        std::mem::take(&mut self.prepared_directories)
+    }
+
     pub fn finalize_regular_data_file(
         &mut self,
         target: &RestoreTarget,
@@ -170,7 +176,12 @@ impl LocalRestorer {
 
 impl Restorer for LocalRestorer {
     fn create_dir(&mut self, target: &RestoreTarget) -> Result<(), UnixFsError> {
-        create_directory(&self.root, &target.relative_path, self.policy.overwrite)?;
+        create_directory_with_cache(
+            &self.root,
+            &target.relative_path,
+            self.policy.overwrite,
+            &mut self.prepared_directories,
+        )?;
         self.dir_finalize_order.push(target.clone());
         Ok(())
     }
@@ -304,23 +315,27 @@ struct FileCacheState {
 
 #[derive(Clone)]
 pub(crate) struct PreparedRegularFile {
-    pub(crate) full_path: PathBuf,
-    pub(crate) parent_dir: Arc<File>,
+    pub(crate) relative_path: PathBuf,
+    pub(crate) parent_rel: PathBuf,
     pub(crate) leaf: OsString,
 }
 
 pub struct ConcurrentFileWriter {
+    root: PathBuf,
     files: HashMap<u32, PreparedRegularFile>,
     overwrite: OverwritePolicy,
     restore_owner: bool,
     max_open_files_by_shard: Vec<usize>,
     shards: Vec<Mutex<FileCacheState>>,
+    directory_cache: RwLock<HashMap<PathBuf, Arc<File>>>,
     diagnostics: Option<Arc<UnpackDiagnosticsCollector>>,
 }
 
 impl ConcurrentFileWriter {
     pub(crate) fn new(
+        root: PathBuf,
         files: HashMap<u32, PreparedRegularFile>,
+        prepared_directories: HashMap<PathBuf, Arc<File>>,
         overwrite: OverwritePolicy,
         restore_owner: bool,
         max_open_files: usize,
@@ -342,6 +357,7 @@ impl ConcurrentFileWriter {
             );
         }
         Self {
+            root,
             files,
             overwrite,
             restore_owner,
@@ -355,6 +371,7 @@ impl ConcurrentFileWriter {
                     })
                 })
                 .collect(),
+            directory_cache: RwLock::new(prepared_directories),
             diagnostics,
         }
     }
@@ -400,16 +417,13 @@ impl ConcurrentFileWriter {
             return Ok(file);
         }
 
-        let prepared = self.file_spec(entry_id)?;
-
-        let _state = self
-            .state_for(self.shard_index_for(entry_id))
-            .lock()
-            .map_err(|_| UnixFsError::InvalidState("file-writer cache lock poisoned"))?;
+        let prepared = self.file_spec(entry_id)?.clone();
+        let parent_dir = self.directory_handle(&prepared.parent_rel)?;
+        let full_path = self.root.join(&prepared.relative_path);
         let file = open_existing_regular_file_at(
-            prepared.parent_dir.as_ref(),
+            parent_dir.as_ref(),
             prepared.leaf.as_os_str(),
-            &prepared.full_path,
+            &full_path,
         )?;
         Ok(Arc::new(file))
     }
@@ -422,6 +436,11 @@ impl ConcurrentFileWriter {
             state.files.clear();
             state.open_order.clear();
         }
+        let mut directories = self
+            .directory_cache
+            .write()
+            .map_err(|_| UnixFsError::InvalidState("directory cache lock poisoned"))?;
+        directories.clear();
         Ok(())
     }
 
@@ -431,12 +450,14 @@ impl ConcurrentFileWriter {
         file_offset: u64,
         buf: &[u8],
     ) -> Result<(), UnixFsError> {
-        let prepared = self.file_spec(target.entry_id)?;
+        let prepared = self.file_spec(target.entry_id)?.clone();
+        let parent_dir = self.directory_handle(&prepared.parent_rel)?;
+        let full_path = self.root.join(&prepared.relative_path);
         let open_started = Instant::now();
         let file = create_or_open_regular_file_at_with_mode(
-            prepared.parent_dir.as_ref(),
+            parent_dir.as_ref(),
             prepared.leaf.as_os_str(),
-            &prepared.full_path,
+            &full_path,
             self.overwrite,
             target.metadata.mode,
         )?;
@@ -449,7 +470,11 @@ impl ConcurrentFileWriter {
             collector.record_write(write_started.elapsed(), buf.len());
         }
         let finalize_started = Instant::now();
-        apply_open_file_metadata(&file, &target.metadata, self.restore_owner)?;
+        if matches!(self.overwrite, OverwritePolicy::Error) {
+            apply_open_file_owner_and_mtime(&file, &target.metadata, self.restore_owner)?;
+        } else {
+            apply_open_file_metadata(&file, &target.metadata, self.restore_owner)?;
+        }
         if let Some(collector) = self.diagnostics.as_ref() {
             collector.record_regular_finalize(finalize_started.elapsed());
         }
@@ -457,6 +482,8 @@ impl ConcurrentFileWriter {
     }
 
     fn file_for(&self, entry_id: u32) -> Result<Arc<File>, UnixFsError> {
+        let prepared = self.file_spec(entry_id)?.clone();
+        let full_path = self.root.join(&prepared.relative_path);
         let shard_idx = self.shard_index_for(entry_id);
         let lock_started = Instant::now();
         let mut state = self
@@ -478,13 +505,13 @@ impl ConcurrentFileWriter {
             collector.record_file_cache_miss();
         }
 
-        let prepared = self.file_spec(entry_id)?;
+        let parent_dir = self.directory_handle(&prepared.parent_rel)?;
         let file = if state.prepared_files.contains(&entry_id) {
             let open_started = Instant::now();
             let file = Arc::new(open_existing_regular_file_at(
-                prepared.parent_dir.as_ref(),
+                parent_dir.as_ref(),
                 prepared.leaf.as_os_str(),
-                &prepared.full_path,
+                &full_path,
             )?);
             if let Some(collector) = self.diagnostics.as_ref() {
                 collector.record_file_reopen(open_started.elapsed());
@@ -493,9 +520,9 @@ impl ConcurrentFileWriter {
         } else {
             let open_started = Instant::now();
             let file = Arc::new(create_or_open_regular_file_at(
-                prepared.parent_dir.as_ref(),
+                parent_dir.as_ref(),
                 prepared.leaf.as_os_str(),
-                &prepared.full_path,
+                &full_path,
                 self.overwrite,
             )?);
             state.prepared_files.insert(entry_id);
@@ -526,19 +553,57 @@ impl ConcurrentFileWriter {
     fn state_for(&self, shard_idx: usize) -> &Mutex<FileCacheState> {
         &self.shards[shard_idx]
     }
+
+    fn directory_handle(&self, rel: &Path) -> Result<Arc<File>, UnixFsError> {
+        {
+            let directories = self
+                .directory_cache
+                .read()
+                .map_err(|_| UnixFsError::InvalidState("directory cache lock poisoned"))?;
+            if let Some(dir) = directories.get(rel).cloned() {
+                if let Some(collector) = self.diagnostics.as_ref() {
+                    collector.record_dir_cache_hit();
+                }
+                return Ok(dir);
+            }
+        }
+
+        if let Some(collector) = self.diagnostics.as_ref() {
+            collector.record_dir_cache_miss();
+        }
+
+        let started = Instant::now();
+        let plan = {
+            let directories = self
+                .directory_cache
+                .read()
+                .map_err(|_| UnixFsError::InvalidState("directory cache lock poisoned"))?;
+            directory_cache_plan(&directories, rel)?
+        };
+        let (dir, opened) = open_directory_chain(&self.root, plan)?;
+        let mut directories = self
+            .directory_cache
+            .write()
+            .map_err(|_| UnixFsError::InvalidState("directory cache lock poisoned"))?;
+        for (path, opened_dir) in opened {
+            directories.entry(path).or_insert(opened_dir);
+        }
+        let dir = directories
+            .entry(rel.to_path_buf())
+            .or_insert_with(|| dir.clone())
+            .clone();
+        if let Some(collector) = self.diagnostics.as_ref() {
+            collector.record_directory_open(started.elapsed());
+        }
+        Ok(dir)
+    }
 }
 
-pub(crate) fn prepare_regular_descriptor(
-    root: &Path,
-    rel: &Path,
-    dir_cache: &mut HashMap<PathBuf, Arc<File>>,
-    diagnostics: Option<&UnpackDiagnosticsCollector>,
-) -> Result<PreparedRegularFile, UnixFsError> {
+pub(crate) fn prepare_regular_descriptor(rel: &Path) -> Result<PreparedRegularFile, UnixFsError> {
     let (parent_rel, leaf) = split_parent_and_leaf(rel)?;
-    let parent_dir = directory_handle_for(root, dir_cache, &parent_rel, diagnostics)?;
     Ok(PreparedRegularFile {
-        full_path: root.join(rel),
-        parent_dir,
+        relative_path: rel.to_path_buf(),
+        parent_rel,
         leaf,
     })
 }
@@ -592,7 +657,7 @@ fn parent_dir_handle(
             }
             None => return Err(UnixFsError::MissingParent(root.join(&current_path))),
         }
-        current = open_directory_nofollow(&current, parent.as_os_str())?;
+        current = open_directory_nofollow(&current, parent.as_os_str(), &root.join(&current_path))?;
     }
 
     Ok((current, leaf.clone(), root.join(rel)))
@@ -609,29 +674,7 @@ fn split_parent_and_leaf(rel: &Path) -> Result<(PathBuf, OsString), UnixFsError>
     ))
 }
 
-fn open_directory_handle(root: &Path, rel: &Path) -> Result<File, UnixFsError> {
-    let mut current = File::open(root)?;
-    let mut current_path = PathBuf::new();
-    for segment in relative_components(rel)? {
-        current_path.push(&segment);
-        match stat_entry(&current, segment.as_os_str())? {
-            Some(stat) => {
-                if is_symlink(&stat) {
-                    return Err(
-                        PathValidationError::SymlinkTraversal(root.join(&current_path)).into(),
-                    );
-                }
-                if !is_directory(&stat) {
-                    return Err(PathValidationError::NotADirectory(root.join(&current_path)).into());
-                }
-            }
-            None => return Err(UnixFsError::MissingParent(root.join(&current_path))),
-        }
-        current = open_directory_nofollow(&current, segment.as_os_str())?;
-    }
-    Ok(current)
-}
-
+#[cfg(test)]
 fn directory_handle_for(
     root: &Path,
     cache: &mut HashMap<PathBuf, Arc<File>>,
@@ -649,22 +692,93 @@ fn directory_handle_for(
         collector.record_dir_cache_miss();
     }
     let started = Instant::now();
-    let dir = Arc::new(open_directory_handle(root, rel)?);
+    let plan = directory_cache_plan(cache, rel)?;
+    let (dir, opened) = open_directory_chain(root, plan)?;
+    for (path, opened_dir) in opened {
+        cache.entry(path).or_insert(opened_dir);
+    }
     if let Some(collector) = diagnostics {
         collector.record_directory_open(started.elapsed());
     }
-    cache.insert(key, dir.clone());
-    Ok(dir)
+    Ok(cache.entry(key).or_insert_with(|| dir.clone()).clone())
 }
 
-fn open_directory_nofollow(parent: &File, segment: &OsStr) -> Result<File, UnixFsError> {
+struct DirectoryCachePlan {
+    base_dir: Option<Arc<File>>,
+    base_path: PathBuf,
+    missing_segments: Vec<OsString>,
+}
+
+fn directory_cache_plan(
+    cache: &HashMap<PathBuf, Arc<File>>,
+    rel: &Path,
+) -> Result<DirectoryCachePlan, UnixFsError> {
+    let segments = relative_components(rel)?;
+    let mut base_dir = cache.get(Path::new("")).cloned();
+    let mut base_path = PathBuf::new();
+    let mut consumed = 0usize;
+    for segment in &segments {
+        let candidate = base_path.join(segment);
+        if let Some(existing) = cache.get(&candidate).cloned() {
+            base_dir = Some(existing);
+            base_path = candidate;
+            consumed = consumed.saturating_add(1);
+            continue;
+        }
+        break;
+    }
+    Ok(DirectoryCachePlan {
+        base_dir,
+        base_path,
+        missing_segments: segments[consumed..].to_vec(),
+    })
+}
+
+fn open_directory_chain(
+    root: &Path,
+    plan: DirectoryCachePlan,
+) -> Result<(Arc<File>, Vec<(PathBuf, Arc<File>)>), UnixFsError> {
+    let mut opened = Vec::new();
+    let mut dir = if let Some(existing) = plan.base_dir {
+        existing
+    } else {
+        let root_dir = Arc::new(File::open(root)?);
+        opened.push((PathBuf::new(), root_dir.clone()));
+        root_dir
+    };
+    let mut current_path = plan.base_path;
+    for segment in plan.missing_segments {
+        current_path.push(&segment);
+        let next = Arc::new(open_directory_nofollow(
+            dir.as_ref(),
+            segment.as_os_str(),
+            &root.join(&current_path),
+        )?);
+        opened.push((current_path.clone(), next.clone()));
+        dir = next;
+    }
+    Ok((dir, opened))
+}
+
+fn open_directory_nofollow(
+    parent: &File,
+    segment: &OsStr,
+    path: &Path,
+) -> Result<File, UnixFsError> {
     let fd = openat(
         parent,
         segment,
         OFlag::O_RDONLY | OFlag::O_CLOEXEC | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW,
         Mode::empty(),
     )
-    .map_err(UnixFsError::from)?;
+    .map_err(|err| match err {
+        Errno::ENOENT => UnixFsError::MissingParent(path.to_path_buf()),
+        Errno::ELOOP => PathValidationError::SymlinkTraversal(path.to_path_buf()).into(),
+        Errno::ENOTDIR | Errno::EISDIR => {
+            PathValidationError::NotADirectory(path.to_path_buf()).into()
+        }
+        other => other.into(),
+    })?;
     Ok(File::from(fd))
 }
 
@@ -676,33 +790,73 @@ fn stat_entry(parent: &File, leaf: &OsStr) -> Result<Option<FileStat>, UnixFsErr
     }
 }
 
-fn create_directory(
+fn create_directory_with_cache(
     root: &Path,
     rel: &Path,
     overwrite: OverwritePolicy,
+    cache: &mut HashMap<PathBuf, Arc<File>>,
 ) -> Result<(), UnixFsError> {
-    let (parent_dir, leaf, full_path) = parent_dir_handle(root, rel, true)?;
-    match stat_entry(&parent_dir, leaf.as_os_str())? {
-        Some(stat) if is_directory(&stat) => Ok(()),
-        Some(stat) => match overwrite {
-            OverwritePolicy::Error => Err(existing_entry_error(&full_path, &stat)),
-            OverwritePolicy::Replace => {
-                remove_existing_entry(&parent_dir, leaf.as_os_str(), &full_path, &stat)?;
+    let segments = relative_components(rel)?;
+    let mut current_path = PathBuf::new();
+    let mut current = if let Some(existing) = cache.get(Path::new("")).cloned() {
+        existing
+    } else {
+        let root_dir = Arc::new(File::open(root)?);
+        cache.insert(PathBuf::new(), root_dir.clone());
+        root_dir
+    };
+
+    for (idx, segment) in segments.iter().enumerate() {
+        current_path.push(segment);
+        if let Some(existing) = cache.get(&current_path).cloned() {
+            current = existing;
+            continue;
+        }
+
+        let full_path = root.join(&current_path);
+        let is_leaf = idx + 1 == segments.len();
+        match stat_entry(current.as_ref(), segment.as_os_str())? {
+            Some(stat) if is_directory(&stat) => {}
+            Some(_stat) if !is_leaf => {
+                return Err(PathValidationError::NotADirectory(full_path).into());
+            }
+            Some(stat) => match overwrite {
+                OverwritePolicy::Error => return Err(existing_entry_error(&full_path, &stat)),
+                OverwritePolicy::Replace => {
+                    remove_existing_entry(
+                        current.as_ref(),
+                        segment.as_os_str(),
+                        &full_path,
+                        &stat,
+                    )?;
+                    mkdirat(
+                        current.as_ref(),
+                        segment.as_os_str(),
+                        Mode::from_bits_truncate(0o755),
+                    )
+                    .map_err(UnixFsError::from)?;
+                }
+            },
+            None => {
                 mkdirat(
-                    &parent_dir,
-                    leaf.as_os_str(),
+                    current.as_ref(),
+                    segment.as_os_str(),
                     Mode::from_bits_truncate(0o755),
                 )
-                .map_err(UnixFsError::from)
+                .map_err(UnixFsError::from)?;
             }
-        },
-        None => mkdirat(
-            &parent_dir,
-            leaf.as_os_str(),
-            Mode::from_bits_truncate(0o755),
-        )
-        .map_err(UnixFsError::from),
+        }
+
+        let opened = Arc::new(open_directory_nofollow(
+            current.as_ref(),
+            segment.as_os_str(),
+            &full_path,
+        )?);
+        cache.insert(current_path.clone(), opened.clone());
+        current = opened;
     }
+
+    Ok(())
 }
 
 fn create_or_open_regular_file(
@@ -879,6 +1033,14 @@ fn apply_open_file_metadata(
 ) -> Result<(), UnixFsError> {
     fchmod(file, Mode::from_bits_truncate(metadata.mode as _)).map_err(UnixFsError::from)?;
 
+    apply_open_file_owner_and_mtime(file, metadata, restore_owner)
+}
+
+fn apply_open_file_owner_and_mtime(
+    file: &File,
+    metadata: &EntryMetadata,
+    restore_owner: bool,
+) -> Result<(), UnixFsError> {
     if restore_owner && Uid::effective().is_root() {
         let uid = Uid::from_raw(metadata.uid);
         let gid = Gid::from_raw(metadata.gid);
@@ -947,6 +1109,65 @@ mod tests {
             mtime_sec: 1_234,
             mtime_nsec: 567,
         }
+    }
+
+    #[test]
+    fn prepare_regular_descriptor_builds_lazy_plan_without_touching_filesystem() {
+        let prepared =
+            prepare_regular_descriptor(Path::new("missing/deep/file.bin")).expect("prep");
+
+        assert_eq!(
+            prepared.relative_path,
+            PathBuf::from("missing/deep/file.bin")
+        );
+        assert_eq!(prepared.parent_rel, PathBuf::from("missing/deep"));
+        assert_eq!(prepared.leaf, OsString::from("file.bin"));
+    }
+
+    #[test]
+    fn directory_handle_for_caches_ancestor_prefixes() {
+        let temp = TempDir::new().expect("temp");
+        let root = temp.path().to_path_buf();
+        fs::create_dir_all(root.join("a/b/c1")).expect("dir c1");
+        fs::create_dir_all(root.join("a/b/c2")).expect("dir c2");
+
+        let mut cache = HashMap::new();
+        directory_handle_for(&root, &mut cache, Path::new("a/b/c1"), None).expect("open c1");
+
+        assert!(cache.contains_key(Path::new("")));
+        assert!(cache.contains_key(Path::new("a")));
+        assert!(cache.contains_key(Path::new("a/b")));
+        assert!(cache.contains_key(Path::new("a/b/c1")));
+
+        directory_handle_for(&root, &mut cache, Path::new("a/b/c2"), None).expect("open c2");
+        assert!(cache.contains_key(Path::new("a/b/c2")));
+    }
+
+    #[test]
+    fn create_dir_caches_all_created_directories() {
+        let temp = TempDir::new().expect("temp");
+        let root = temp.path().to_path_buf();
+        let mut restorer = LocalRestorer::new(
+            root,
+            RestorePolicy {
+                overwrite: OverwritePolicy::Replace,
+                restore_owner: false,
+                max_open_files: 16,
+            },
+        );
+        let target = RestoreTarget {
+            entry_id: 1,
+            relative_path: PathBuf::from("a/b/c"),
+            metadata: meta(),
+        };
+
+        restorer.create_dir(&target).expect("create dir");
+        let cache = restorer.take_prepared_directories();
+
+        assert!(cache.contains_key(Path::new("")));
+        assert!(cache.contains_key(Path::new("a")));
+        assert!(cache.contains_key(Path::new("a/b")));
+        assert!(cache.contains_key(Path::new("a/b/c")));
     }
 
     #[test]
@@ -1029,11 +1250,11 @@ mod tests {
                 mtime_nsec: 765,
             },
         };
-        let mut dir_cache = HashMap::new();
-        let prepared =
-            prepare_regular_descriptor(&root, &relative_path, &mut dir_cache, None).expect("prep");
+        let prepared = prepare_regular_descriptor(&relative_path).expect("prep");
         let writer = ConcurrentFileWriter::new(
+            root.clone(),
             HashMap::from([(target.entry_id, prepared)]),
+            HashMap::new(),
             OverwritePolicy::Replace,
             false,
             4,
@@ -1052,16 +1273,54 @@ mod tests {
     }
 
     #[test]
+    fn write_extent_once_default_overwrite_path_restores_mode_and_mtime() {
+        let temp = TempDir::new().expect("temp");
+        let root = temp.path().to_path_buf();
+        let relative_path = PathBuf::from("a/default-one-shot.bin");
+        fs::create_dir_all(root.join("a")).expect("dir");
+        let target = RestoreTarget {
+            entry_id: 9,
+            relative_path: relative_path.clone(),
+            metadata: EntryMetadata {
+                mode: 0o741,
+                uid: 0,
+                gid: 0,
+                mtime_sec: 5_432,
+                mtime_nsec: 123,
+            },
+        };
+        let prepared = prepare_regular_descriptor(&relative_path).expect("prep");
+        let writer = ConcurrentFileWriter::new(
+            root.clone(),
+            HashMap::from([(target.entry_id, prepared)]),
+            HashMap::new(),
+            OverwritePolicy::Error,
+            false,
+            4,
+            2,
+            None,
+        );
+
+        writer
+            .write_extent_once(&target, 0, b"payload")
+            .expect("write one-shot");
+
+        let metadata = fs::metadata(root.join(&relative_path)).expect("metadata");
+        assert_eq!(metadata.permissions().mode() & 0o777, 0o741);
+        assert_eq!(metadata.mtime(), 5_432);
+        assert_eq!(metadata.mtime_nsec(), 123);
+    }
+
+    #[test]
     fn concurrent_writer_keeps_total_fd_budget_bounded() {
         let temp = TempDir::new().expect("temp");
         let root = temp.path().to_path_buf();
         fs::create_dir_all(root.join("a")).expect("dir");
-        let mut dir_cache = HashMap::new();
-        let prepared =
-            prepare_regular_descriptor(&root, Path::new("a/data.bin"), &mut dir_cache, None)
-                .expect("prep");
+        let prepared = prepare_regular_descriptor(Path::new("a/data.bin")).expect("prep");
         let writer = ConcurrentFileWriter::new(
+            root,
             HashMap::from([(1, prepared)]),
+            HashMap::new(),
             OverwritePolicy::Replace,
             false,
             3,

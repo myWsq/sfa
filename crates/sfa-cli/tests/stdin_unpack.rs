@@ -80,7 +80,7 @@ fn unpack_stdin_json_reports_wall_and_phase_breakdowns() {
 
     let json: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("unpack stdin json stats");
-    assert_eq!(json["codec"].as_str(), Some("lz4"));
+    assert_eq!(json["codec"].as_str(), Some("zstd"));
     assert_eq!(
         json["wall_breakdown"]["setup_ms"]["status"].as_str(),
         Some("measured")

@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::BufReader;
 use std::path::Path;
 use std::process::Command;
 
@@ -42,11 +43,36 @@ fn pack_dry_run_json_reports_default_options() {
 
     let json: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("pack dry-run json stats");
-    assert_eq!(json["codec"].as_str(), Some("lz4"));
+    assert_eq!(json["codec"].as_str(), Some("zstd"));
     assert_eq!(json["bundle_target_bytes"].as_u64(), Some(4 * 1024 * 1024));
     assert_eq!(json["small_file_threshold"].as_u64(), Some(256 * 1024));
     assert_eq!(json["entry_count"].as_u64(), Some(4));
     assert!(json["threads"].as_u64().unwrap_or(0) >= 1);
+}
+
+#[test]
+fn pack_without_codec_flag_writes_zstd_archive_header() {
+    let temp = TempDir::new().unwrap();
+    let src = temp.path().join("src");
+    let archive = temp.path().join("packed.sfa");
+    write_sample_source(&src);
+
+    let output = cli_command()
+        .args(["pack"])
+        .arg(&src)
+        .arg(&archive)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let mut reader = BufReader::new(fs::File::open(&archive).unwrap());
+    let header = sfa_core::format::read_header(&mut reader).expect("read archive header");
+    assert_eq!(header.data_codec, sfa_core::DataCodec::Zstd);
 }
 
 #[test]
@@ -92,7 +118,7 @@ fn unpack_dry_run_with_file_archive_reports_json_stats() {
 
     let json: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("unpack dry-run json stats");
-    assert_eq!(json["codec"].as_str(), Some("lz4"));
+    assert_eq!(json["codec"].as_str(), Some("zstd"));
     assert_eq!(json["raw_bytes"].as_u64(), Some(archive_size));
     assert_eq!(json["encoded_bytes"].as_u64(), Some(archive_size));
     assert!(json["threads"].as_u64().unwrap_or(0) >= 1);
