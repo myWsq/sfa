@@ -921,14 +921,19 @@ fn write_untrusted_marker(output_dir: &Path) -> Result<(), UnixFsError> {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::fs::Permissions;
     use std::io::Cursor;
-    use std::os::unix::fs::symlink;
-    use std::path::PathBuf;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
+    use std::path::{Path, PathBuf};
     use std::sync::Arc;
 
+    use nix::sys::stat::{UtimensatFlags, utimensat};
+    use nix::sys::time::TimeSpec;
     use tempfile::TempDir;
 
-    use sfa_core::{PackConfig, UnpackConfig};
+    use sfa_core::{
+        ArchiveReader, FeatureFlags, PackConfig, UnpackConfig, prepare_archive, write_archive,
+    };
 
     use crate::UnixFsError;
 
@@ -958,6 +963,59 @@ mod tests {
         }
     }
 
+    fn set_path_mtime(path: &Path, sec: i64, nsec: u32) {
+        let parent = fs::File::open(path.parent().expect("mtime parent")).expect("open parent");
+        let leaf = path.file_name().expect("mtime leaf");
+        utimensat(
+            &parent,
+            leaf,
+            &TimeSpec::UTIME_OMIT,
+            &TimeSpec::new(sec, i64::from(nsec)),
+            UtimensatFlags::FollowSymlink,
+        )
+        .expect("set mtime");
+    }
+
+    fn alternate_raw_id(current: u32) -> u32 {
+        if current == 0 { 1 } else { 0 }
+    }
+
+    fn rewrite_archive_owner_ids(archive: &Path, uid: u32, gid: u32) {
+        let bytes = fs::read(archive).expect("read archive");
+        let mut reader = ArchiveReader::new(Cursor::new(bytes));
+        let header = reader.read_header().expect("read header");
+        let mut manifest = reader.read_manifest().expect("read manifest");
+        for entry in manifest.entries.iter_mut().filter(|entry| {
+            matches!(
+                entry.kind,
+                sfa_core::EntryKind::Directory | sfa_core::EntryKind::Regular
+            )
+        }) {
+            entry.uid = uid;
+            entry.gid = gid;
+        }
+
+        let mut frames = Vec::new();
+        while let Some(frame) = reader.next_frame().expect("read frame") {
+            frames.push(frame);
+        }
+        let _ = reader.read_trailer().expect("read trailer");
+
+        let config = PackConfig {
+            codec: header.data_codec,
+            manifest_codec: header.manifest_codec,
+            compression_level: None,
+            threads: usize::from(header.suggested_parallelism.max(1)),
+            bundle_target_bytes: header.bundle_target_bytes,
+            small_file_threshold: header.small_file_threshold,
+            integrity: header.integrity_mode,
+            preserve_owner: header.feature_flags.contains(FeatureFlags::PRESERVE_OWNER),
+        };
+        let prepared = prepare_archive(manifest, &config).expect("prepare archive");
+        let mut writer = fs::File::create(archive).expect("rewrite archive");
+        write_archive(&mut writer, &prepared, frames, config.integrity).expect("write archive");
+    }
+
     #[test]
     fn roundtrip_pack_and_unpack() {
         let src = TempDir::new().unwrap();
@@ -983,6 +1041,37 @@ mod tests {
         );
         assert_eq!(fs::read(out.join("master.txt")).unwrap(), b"same");
         assert_eq!(fs::read(out.join("peer.txt")).unwrap(), b"same");
+    }
+
+    #[test]
+    fn roundtrip_restores_mode_and_mtime_for_files_and_directories() {
+        let src = TempDir::new().unwrap();
+        let dst = TempDir::new().unwrap();
+        let archive = src.path().join("sample.sfa");
+        let nested = src.path().join("nested");
+        let file = nested.join("payload.txt");
+
+        fs::create_dir(&nested).unwrap();
+        fs::write(&file, b"payload").unwrap();
+        fs::set_permissions(&nested, Permissions::from_mode(0o751)).unwrap();
+        fs::set_permissions(&file, Permissions::from_mode(0o640)).unwrap();
+        set_path_mtime(&file, 9_876, 123);
+        set_path_mtime(&nested, 8_765, 432);
+
+        pack_directory(src.path(), &archive, &PackConfig::default()).unwrap();
+
+        let out = dst.path().join("out");
+        unpack_archive(&archive, &out, &UnpackConfig::default()).unwrap();
+
+        let restored_dir = fs::metadata(out.join("nested")).unwrap();
+        assert_eq!(restored_dir.permissions().mode() & 0o777, 0o751);
+        assert_eq!(restored_dir.mtime(), 8_765);
+        assert_eq!(restored_dir.mtime_nsec(), 432);
+
+        let restored_file = fs::metadata(out.join("nested/payload.txt")).unwrap();
+        assert_eq!(restored_file.permissions().mode() & 0o777, 0o640);
+        assert_eq!(restored_file.mtime(), 9_876);
+        assert_eq!(restored_file.mtime_nsec(), 123);
     }
 
     #[test]
@@ -1174,5 +1263,45 @@ mod tests {
 
         unpack_archive(&archive, &out, &UnpackConfig::default()).unwrap();
         assert!(!out.join(UNTRUSTED_MARKER_NAME).exists());
+    }
+
+    #[test]
+    fn unpack_default_policy_skips_stored_owner_metadata() {
+        let src = TempDir::new().unwrap();
+        let dst = TempDir::new().unwrap();
+        let archive = src.path().join("sample.sfa");
+        let nested = src.path().join("owned-dir");
+        let file = nested.join("owned.txt");
+
+        fs::create_dir(&nested).unwrap();
+        fs::write(&file, b"owner metadata").unwrap();
+
+        let source_metadata = fs::metadata(&file).unwrap();
+        let current_uid = source_metadata.uid();
+        let current_gid = source_metadata.gid();
+        let archive_uid = alternate_raw_id(current_uid);
+        let archive_gid = alternate_raw_id(current_gid);
+
+        let pack_config = PackConfig {
+            preserve_owner: true,
+            ..PackConfig::default()
+        };
+        pack_directory(src.path(), &archive, &pack_config).unwrap();
+        rewrite_archive_owner_ids(&archive, archive_uid, archive_gid);
+
+        let out = dst.path().join("out");
+        unpack_archive(&archive, &out, &UnpackConfig::default()).unwrap();
+
+        let restored_dir = fs::metadata(out.join("owned-dir")).unwrap();
+        assert_eq!(restored_dir.uid(), current_uid);
+        assert_eq!(restored_dir.gid(), current_gid);
+        assert_ne!(restored_dir.uid(), archive_uid);
+        assert_ne!(restored_dir.gid(), archive_gid);
+
+        let restored_file = fs::metadata(out.join("owned-dir/owned.txt")).unwrap();
+        assert_eq!(restored_file.uid(), current_uid);
+        assert_eq!(restored_file.gid(), current_gid);
+        assert_ne!(restored_file.uid(), archive_uid);
+        assert_ne!(restored_file.gid(), archive_gid);
     }
 }

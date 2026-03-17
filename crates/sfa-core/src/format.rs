@@ -461,7 +461,7 @@ mod tests {
     use crate::config::PackConfig;
     use crate::model::{BundlePlanRecord, EntryRecord, Manifest};
 
-    use super::{HeaderV1, decode_manifest, encode_manifest};
+    use super::{FeatureFlags, HeaderV1, decode_manifest, encode_manifest};
 
     #[test]
     fn header_roundtrip() {
@@ -543,5 +543,65 @@ mod tests {
         let decoded = decode_manifest(&header, &bytes).unwrap();
         assert_eq!(decoded.entries.len(), 1);
         assert_eq!(decoded.entries[0].uid, 42);
+    }
+
+    #[test]
+    fn header_sets_preserve_owner_flag_only_when_requested() {
+        let manifest = Manifest {
+            entries: vec![EntryRecord {
+                parent_id: u32::MAX,
+                kind: crate::model::EntryKind::Root,
+                flags: 0,
+                mode: 0o755,
+                uid: 42,
+                gid: 7,
+                mtime_sec: 1,
+                mtime_nsec: 2,
+                size: 0,
+                name_off: 0,
+                name_len: 0,
+                link_off: 0,
+                link_len: 0,
+                first_extent: 0,
+                extent_count: 0,
+                hardlink_master_entry_id: u32::MAX,
+                dev_major: 0,
+                dev_minor: 0,
+                meta_off: 0,
+                meta_len: 0,
+            }],
+            bundles: vec![BundlePlanRecord {
+                bundle_id: 0,
+                raw_len: 0,
+                file_count: 0,
+                extent_count: 0,
+                kind: crate::model::BundleKind::Aggregate,
+                flags: 0,
+            }],
+            ..Manifest::default()
+        };
+
+        let default_config = PackConfig::default();
+        let (bytes, hash) = encode_manifest(&manifest, default_config.manifest_codec).unwrap();
+        let default_header = HeaderV1::from_manifest(&manifest, &default_config, bytes.len(), hash);
+        assert!(
+            !default_header
+                .feature_flags
+                .contains(FeatureFlags::PRESERVE_OWNER)
+        );
+
+        let preserve_owner_config = PackConfig {
+            preserve_owner: true,
+            ..PackConfig::default()
+        };
+        let (bytes, hash) =
+            encode_manifest(&manifest, preserve_owner_config.manifest_codec).unwrap();
+        let preserve_owner_header =
+            HeaderV1::from_manifest(&manifest, &preserve_owner_config, bytes.len(), hash);
+        assert!(
+            preserve_owner_header
+                .feature_flags
+                .contains(FeatureFlags::PRESERVE_OWNER)
+        );
     }
 }

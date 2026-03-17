@@ -58,6 +58,7 @@
 * 文件内容一致
 * mode 恢复正确
 * mtime 恢复正确
+* 默认 / 显式 no-owner 路径不会应用归档内 uid / gid
 * symlink target 一致
 * hardlink inode 关系一致（同设备下）
 
@@ -279,31 +280,30 @@ tar -xf out.tar -C out_dir
 
 交付物：
 
-* symlink
-* hardlink
-* owner / mode / mtime 恢复
-* 更强路径安全策略
-* 错误码与日志完善
+* 收口现有 `mode` / `mtime` / owner policy contract
+* metadata roundtrip 与 owner-policy 验证资产
+* link / safety / metadata 语义在仓库级测试中可审计
+* 路线图与仓库文档同步，明确 deferred 范围
 
 完成标准：
 
-* Unix 语义闭环
-* 安全测试覆盖到位
+* 当前 v1 Unix metadata 语义有明确 spec、实现与验证资产
+* 默认非特权路径与 preserve-owner 分支都可在仓库内追溯
+* xattrs / ACL 仍保持 deferred，不混入当前里程碑
 
 ## 9.5 M4：增强能力
 
 交付物：
 
-* Zstd
-* async unpack
+* async unpack（如仍需要）
 * xattrs / ACL（可选）
-* strong trailer
-* 更多 benchmark 数据集
+* 更广的 special file / Unix 扩展元数据能力
+* 更多 benchmark 数据集与自动化发版能力
 
 完成标准：
 
-* 从 HTTP 流稳定解压
-* 完整性与扩展元数据具备初步能力
+* 扩展元数据能力有独立 spec 与回归资产
+* 后续增强不破坏已冻结的 v1 metadata contract
 
 ## 10. 风险清单
 
@@ -341,4 +341,3 @@ SFA 项目的正确推进方式不是先写代码再补规范，而是：
 一句话总结：
 
 > **先把“可流式、可并行、能跑赢 tar”的主链路做稳，再扩展功能面。**
-

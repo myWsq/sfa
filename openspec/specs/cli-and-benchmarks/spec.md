@@ -36,11 +36,11 @@ The project SHALL include benchmark tooling that runs pack and unpack measuremen
 - **THEN** it executes both SFA and `tar + same codec` workflows and stores comparable metrics for each dataset and codec combination
 
 ### Requirement: Test suites cover protocol, streaming, corruption, and safety baselines
-Before the first v1 release, the project SHALL include automated tests for roundtrip correctness, fragmented sequential input, corruption rejection, path safety, golden archive compatibility, and CLI behavior regressions for documented defaults, supported input-mode combinations, and expected usage failures.
+Before the first v1 release, the project SHALL include automated tests for roundtrip correctness, fragmented sequential input, corruption rejection, path safety, golden archive compatibility, metadata roundtrip for supported Unix entries, and CLI behavior regressions for documented defaults, supported input-mode combinations, and expected usage failures. This verification coverage MUST include checks that supported restores preserve `mode` and `mtime` for regular files and directories, that the default unpack path leaves owner restoration disabled, and that link and safety scenarios remain represented in committed fixtures or tests.
 
 #### Scenario: CI runs repository verification coverage
 - **WHEN** repository tests are executed in CI
-- **THEN** the suite includes protocol, streaming, corruption, security, golden-archive, and CLI regression cases for the v1 feature set
+- **THEN** the suite includes protocol, streaming, corruption, security, golden-archive, metadata-restore, and CLI regression cases for the v1 feature set
 
 ### Requirement: Benchmark datasets are committed and documented for the default matrix
 The repository SHALL provide committed input trees for the default benchmark matrix under `tests/fixtures/datasets/small-text/input`, `tests/fixtures/datasets/small-binary/input`, and `tests/fixtures/datasets/large-control/input`. Each dataset MUST contain real benchmark content rather than placeholders, and each dataset directory MUST include accompanying documentation that identifies the dataset purpose, construction or provenance, and a stable summary of its scale.

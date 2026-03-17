@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-SFA v1 当前处于 `开发中` 状态，仓库已经具备可运行的最小可用链路，并已完成协议冻结、M1 收口与 M2 性能主链路建设。
+SFA v1 当前处于 `开发中` 状态，仓库已经具备可运行的最小可用链路，并已完成协议冻结、M1 收口与 M2 性能主链路建设。当前工作已进入 M3 的第一阶段：收口现有 Unix metadata contract 与验证资产。
 
 当前已经可用的能力包括：
 
@@ -16,6 +16,8 @@ SFA v1 当前处于 `开发中` 状态，仓库已经具备可运行的最小可
 - `lz4`、`zstd` 编解码支持
 - 确定性目录扫描、稳定 bundle 规划与顺序读写
 - regular file、directory、symlink、hardlink 的打包与恢复
+- regular file 与 directory 默认恢复 `mode` / `mtime`，archive manifest 持续记录 `uid` / `gid`
+- owner restore 为显式 opt-in 路径，且仍受 effective root 约束
 - roundtrip、streaming、corruption、safety 测试框架和 benchmark harness
 - benchmark report 中的阶段级 wall-time breakdown 与支持环境下的资源观测信息
 - `sfa pack` / `sfa unpack` 的 machine-readable stats 输出，可供 benchmark runner 和自动化脚本消费
@@ -26,7 +28,7 @@ SFA v1 当前处于 `开发中` 状态，仓库已经具备可运行的最小可
 
 当前下一轮工作的重点包括：
 
-- 启动 M3：Unix 语义增强的范围设计与实现拆解
+- 推进 M3 第一阶段：收口当前 Unix metadata contract 与验证资产
 - 维持当前手动发版节奏下的版本、验证清单与 release notes 同步
 
 ## v1 目标
@@ -47,7 +49,7 @@ SFA v1 的目标是提供一个面向本地归档场景的、可顺序读取的 
 | M0 | 协议冻结 | 已完成 | 冻结 v1 协议文本，提交首批 golden fixtures，并完成评审留痕 |
 | M1 | 最小可用链路 | 已完成 | 将当前 MVP 收口为可稳定回归、可进入 CI 的最小可用版本 |
 | M2 | 性能主链路 | 已完成 | 补齐真实 benchmark 数据与结果，建立 `tar + same codec` 对照基线，并记录阶段级/资源级观测 |
-| M3 | Unix 语义增强 | 未开始 | 在 v1 主链路稳定后，补充更完整的 Unix 元数据与边界能力 |
+| M3 | Unix 语义增强 | 进行中 | 在 v1 主链路稳定后，先收口当前 metadata contract 与验证资产，再决定后续扩展元数据范围 |
 
 状态定义：
 
@@ -124,29 +126,36 @@ SFA v1 的目标是提供一个面向本地归档场景的、可顺序读取的 
 
 ### M3：Unix 语义增强
 
-状态：`未开始`
+状态：`进行中`
 
-计划范围：
+当前范围：
 
-- 更强的元数据恢复验证
+- 收口当前 v1 Unix metadata contract，明确 `mode` / `mtime` / owner policy 的承诺边界
+- 补齐 metadata roundtrip、owner-policy 与现有 link / safety 场景的仓库级验证
+- 同步路线图、README 与技术方案文档，使 xattrs / ACL 继续保持 deferred
+
+后续候选：
+
 - 如仍在范围内，评估 xattrs / ACL 的后续能力
 - 更完整的 Unix 边界样例与异常路径覆盖
 
 关闭条件：
 
-- 相关增强能力有明确 spec、实现与测试资产
+- 当前 metadata contract 有明确 spec、实现与测试资产
+- 仓库级状态文档与技术方案文档不再把已交付能力误标为未来里程碑
+- 若进入扩展元数据能力，使用新的 OpenSpec change 明确拆分范围
 
 ## 近期优先级
 
 当前最优先的下一轮工作建议为：
 
-`M3：Unix 语义增强启动`
+`M3：Unix metadata contract 收口`
 
 建议范围：
 
-- 增强 owner / metadata restore 的验证深度，明确哪些 Unix 语义仍在 v1 范围内
-- 评估 xattrs / ACL 是否作为后续能力继续推进，或继续保持 deferred
-- 补齐更完整的 Unix 边界样例与异常路径覆盖
+- 增强 owner / metadata restore 的验证深度，明确哪些 Unix 语义已是 v1 contract
+- 保持 xattrs / ACL deferred，不在当前 change 中混入新的扩展元数据交付
+- 让 metadata roundtrip、owner-policy 与现有 link / safety 场景一起进入可审计的仓库级验证
 - 保持当前手动 release checklist 与 benchmark dry-run 作为稳定的发版前闸口
 
 ## 文档边界

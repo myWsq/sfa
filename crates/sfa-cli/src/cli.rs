@@ -41,7 +41,7 @@ pub struct PackArgs {
     /// Integrity mode.
     #[arg(long, value_enum, default_value_t = IntegrityMode::Fast)]
     pub integrity: IntegrityMode,
-    /// Preserve uid/gid ownership metadata.
+    /// Mark archive owner-preservation intent for later opt-in uid/gid restore.
     #[arg(long, default_value_t = false)]
     pub preserve_owner: bool,
     /// Parse and summarize only; do not execute archival backend.
@@ -68,7 +68,8 @@ pub struct UnpackArgs {
     /// Integrity policy used during decode.
     #[arg(long, value_enum, default_value_t = IntegrityMode::Fast)]
     pub integrity: IntegrityMode,
-    /// Owner restore policy.
+    /// Owner restore policy. `auto` and `never` keep owner restore disabled;
+    /// `preserve` attempts uid/gid restore when unpack runs as root.
     #[arg(long, value_enum, default_value_t = RestoreOwnerPolicy::Auto)]
     pub restore_owner: RestoreOwnerPolicy,
     /// Parse and summarize only; do not execute unpack backend.
@@ -106,8 +107,11 @@ pub enum IntegrityMode {
 #[derive(Debug, Clone, Copy, ValueEnum, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RestoreOwnerPolicy {
+    /// Default path: keep restored ownership on the current process identity.
     Auto,
+    /// Attempt to apply stored uid/gid metadata when unpack runs as root.
     Preserve,
+    /// Explicitly disable owner restoration even when archives carry owner metadata.
     Never,
 }
 

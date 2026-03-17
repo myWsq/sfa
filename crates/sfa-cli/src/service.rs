@@ -175,11 +175,17 @@ fn build_unpack_config(req: &UnpackRequest) -> UnpackConfig {
         } else {
             CoreOverwritePolicy::Error
         },
-        restore_owner: match req.restore_owner {
-            RestoreOwnerPolicy::Auto | RestoreOwnerPolicy::Never => CoreRestoreOwnerPolicy::Skip,
-            RestoreOwnerPolicy::Preserve => CoreRestoreOwnerPolicy::Preserve,
-        },
+        restore_owner: map_restore_owner_policy(req.restore_owner),
         integrity: map_integrity(req.integrity),
+    }
+}
+
+fn map_restore_owner_policy(policy: RestoreOwnerPolicy) -> CoreRestoreOwnerPolicy {
+    match policy {
+        // The CLI keeps owner restoration opt-in. `auto` and `never` both stay on the
+        // default non-restoring path until a future surface redesign differentiates them.
+        RestoreOwnerPolicy::Auto | RestoreOwnerPolicy::Never => CoreRestoreOwnerPolicy::Skip,
+        RestoreOwnerPolicy::Preserve => CoreRestoreOwnerPolicy::Preserve,
     }
 }
 
@@ -327,4 +333,31 @@ fn estimate_encoded_size(raw_bytes: u64, codec: DataCodec) -> u64 {
 
 fn elapsed_ms(duration: std::time::Duration) -> u64 {
     duration.as_millis().min(u128::from(u64::MAX)) as u64
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cli::RestoreOwnerPolicy;
+
+    use super::map_restore_owner_policy;
+
+    #[test]
+    fn auto_and_never_owner_policies_map_to_skip() {
+        assert_eq!(
+            map_restore_owner_policy(RestoreOwnerPolicy::Auto),
+            sfa_core::RestoreOwnerPolicy::Skip
+        );
+        assert_eq!(
+            map_restore_owner_policy(RestoreOwnerPolicy::Never),
+            sfa_core::RestoreOwnerPolicy::Skip
+        );
+    }
+
+    #[test]
+    fn preserve_owner_policy_maps_to_core_preserve() {
+        assert_eq!(
+            map_restore_owner_policy(RestoreOwnerPolicy::Preserve),
+            sfa_core::RestoreOwnerPolicy::Preserve
+        );
+    }
 }

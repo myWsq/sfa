@@ -105,8 +105,10 @@ pub enum OverwritePolicy {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum RestoreOwnerPolicy {
+    /// Keep restored ownership on the current process identity.
     #[default]
     Skip,
+    /// Attempt to apply stored uid/gid metadata when unpack runs as root.
     Preserve,
 }
 
@@ -119,6 +121,7 @@ pub struct PackConfig {
     pub bundle_target_bytes: u32,
     pub small_file_threshold: u32,
     pub integrity: IntegrityMode,
+    /// Mark the archive as owner-preserving for later opt-in uid/gid restore.
     pub preserve_owner: bool,
 }
 
@@ -143,6 +146,7 @@ impl Default for PackConfig {
 pub struct UnpackConfig {
     pub threads: Option<usize>,
     pub overwrite: OverwritePolicy,
+    /// Owner restore remains opt-in and still requires effective root at restore time.
     pub restore_owner: RestoreOwnerPolicy,
     pub integrity: IntegrityMode,
 }
