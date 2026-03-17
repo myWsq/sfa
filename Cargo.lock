@@ -584,7 +584,7 @@ dependencies = [
 
 [[package]]
 name = "sfa-bench"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "libc",
  "serde",
@@ -597,7 +597,7 @@ dependencies = [
 
 [[package]]
 name = "sfa-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "clap",
  "serde",
@@ -610,7 +610,7 @@ dependencies = [
 
 [[package]]
 name = "sfa-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bitflags",
  "blake3",
@@ -627,7 +627,7 @@ dependencies = [
 
 [[package]]
 name = "sfa-unixfs"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "crossbeam-channel",
  "filetime",

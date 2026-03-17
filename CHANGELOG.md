@@ -4,6 +4,22 @@ This file records repository-level changes for SFA. The project is still in the 
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-17
+
+### Added
+
+- Add additive unpack `wall_breakdown` metrics alongside diagnostic `phase_breakdown` stats in machine-readable CLI and benchmark outputs
+
+### Changed
+
+- Change the default `sfa pack` data codec to `zstd` at level `-3` when `--codec` is not provided
+- Reduce small-file unpack setup overhead by tightening restore-path setup before worker scatter begins
+- Refresh the committed benchmark baseline, benchmark documentation, and release guidance to describe the split unpack timing model
+
+### Fixed
+
+- Use the correct macOS Intel runner label in the GitHub release workflow so tagged release builds can complete on all intended platforms
+
 ## [0.2.0] - 2026-03-17
 
 ### Added
