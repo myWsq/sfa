@@ -151,6 +151,10 @@ impl LocalRestorer {
         std::mem::take(&mut self.prepared_directories)
     }
 
+    pub fn set_dir_finalize_order(&mut self, targets: Vec<RestoreTarget>) {
+        self.dir_finalize_order = targets;
+    }
+
     pub fn finalize_regular_data_file(
         &mut self,
         target: &RestoreTarget,
@@ -859,6 +863,125 @@ fn create_directory_with_cache(
     Ok(())
 }
 
+pub(crate) fn materialize_directory_frontiers(
+    root: &Path,
+    frontiers: &[Vec<PathBuf>],
+    overwrite: OverwritePolicy,
+    worker_limit: usize,
+) -> Result<HashMap<PathBuf, Arc<File>>, UnixFsError> {
+    let mut prepared_directories = HashMap::new();
+    prepared_directories.insert(PathBuf::new(), Arc::new(File::open(root)?));
+
+    for frontier in frontiers {
+        if frontier.is_empty() {
+            continue;
+        }
+
+        let frontier_targets = frontier
+            .iter()
+            .map(|rel| {
+                let parent_rel = rel.parent().unwrap_or_else(|| Path::new("")).to_path_buf();
+                let parent_dir = prepared_directories.get(&parent_rel).cloned().ok_or(
+                    UnixFsError::InvalidState("missing prepared parent directory during setup"),
+                )?;
+                Ok((rel.clone(), parent_dir))
+            })
+            .collect::<Result<Vec<_>, UnixFsError>>()?;
+        let worker_count = frontier_targets.len().min(worker_limit.max(1));
+
+        if worker_count <= 1 {
+            for (rel, parent_dir) in frontier_targets {
+                let dir = create_directory_from_parent(root, &rel, parent_dir.as_ref(), overwrite)?;
+                prepared_directories.insert(rel, dir);
+            }
+            continue;
+        }
+
+        let chunk_size = frontier_targets.len().div_ceil(worker_count);
+        let root_path = root.to_path_buf();
+        let mut worker_results = Vec::new();
+        std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for chunk in frontier_targets.chunks(chunk_size) {
+                let root_path = root_path.clone();
+                let chunk = chunk.to_vec();
+                handles.push(
+                    scope.spawn(move || -> Result<HashMap<PathBuf, Arc<File>>, UnixFsError> {
+                        let mut prepared = HashMap::new();
+                        for (rel, parent_dir) in chunk {
+                            let dir = create_directory_from_parent(
+                                &root_path,
+                                &rel,
+                                parent_dir.as_ref(),
+                                overwrite,
+                            )?;
+                            prepared.insert(rel, dir);
+                        }
+                        Ok(prepared)
+                    }),
+                );
+            }
+
+            for handle in handles {
+                let prepared = handle
+                    .join()
+                    .map_err(|_| UnixFsError::InvalidState("directory setup worker panicked"))??;
+                worker_results.push(prepared);
+            }
+
+            Ok::<(), UnixFsError>(())
+        })?;
+
+        for prepared in worker_results {
+            for (path, dir) in prepared {
+                prepared_directories.insert(path, dir);
+            }
+        }
+    }
+
+    Ok(prepared_directories)
+}
+
+fn create_directory_from_parent(
+    root: &Path,
+    rel: &Path,
+    parent_dir: &File,
+    overwrite: OverwritePolicy,
+) -> Result<Arc<File>, UnixFsError> {
+    let (_parent_rel, leaf) = split_parent_and_leaf(rel)?;
+    let full_path = root.join(rel);
+
+    match stat_entry(parent_dir, leaf.as_os_str())? {
+        Some(stat) if is_directory(&stat) => {}
+        Some(stat) => match overwrite {
+            OverwritePolicy::Error => return Err(existing_entry_error(&full_path, &stat)),
+            OverwritePolicy::Replace => {
+                remove_existing_entry(parent_dir, leaf.as_os_str(), &full_path, &stat)?;
+                mkdirat(
+                    parent_dir,
+                    leaf.as_os_str(),
+                    Mode::from_bits_truncate(0o755),
+                )
+                .map_err(UnixFsError::from)?;
+            }
+        },
+        None => {
+            mkdirat(
+                parent_dir,
+                leaf.as_os_str(),
+                Mode::from_bits_truncate(0o755),
+            )
+            .map_err(UnixFsError::from)?;
+        }
+    }
+
+    Ok(Arc::new(open_directory_nofollow(
+        parent_dir,
+        leaf.as_os_str(),
+        &full_path,
+    )?))
+}
+
 fn create_or_open_regular_file(
     root: &Path,
     rel: &Path,
@@ -1168,6 +1291,56 @@ mod tests {
         assert!(cache.contains_key(Path::new("a")));
         assert!(cache.contains_key(Path::new("a/b")));
         assert!(cache.contains_key(Path::new("a/b/c")));
+    }
+
+    #[test]
+    fn materialize_directory_frontiers_handles_narrow_tree_with_high_worker_limit() {
+        let temp = TempDir::new().expect("temp");
+        let root = temp.path().to_path_buf();
+        let frontiers = vec![
+            vec![PathBuf::from("a")],
+            vec![PathBuf::from("a/b")],
+            vec![PathBuf::from("a/b/c")],
+        ];
+
+        let cache = materialize_directory_frontiers(&root, &frontiers, OverwritePolicy::Replace, 8)
+            .expect("materialize frontiers");
+
+        assert!(cache.contains_key(Path::new("")));
+        assert!(cache.contains_key(Path::new("a")));
+        assert!(cache.contains_key(Path::new("a/b")));
+        assert!(cache.contains_key(Path::new("a/b/c")));
+        assert!(root.join("a/b/c").is_dir());
+    }
+
+    #[test]
+    fn materialize_directory_frontiers_replace_overwrites_leaf_entry() {
+        let temp = TempDir::new().expect("temp");
+        let root = temp.path().to_path_buf();
+        fs::write(root.join("a"), b"file").expect("seed file");
+        let frontiers = vec![vec![PathBuf::from("a")]];
+
+        let cache = materialize_directory_frontiers(&root, &frontiers, OverwritePolicy::Replace, 4)
+            .expect("materialize frontiers");
+
+        assert!(cache.contains_key(Path::new("a")));
+        assert!(root.join("a").is_dir());
+    }
+
+    #[test]
+    fn materialize_directory_frontiers_requires_parent_frontier() {
+        let temp = TempDir::new().expect("temp");
+        let root = temp.path().to_path_buf();
+        let frontiers = vec![vec![PathBuf::from("a/b")]];
+
+        let err =
+            materialize_directory_frontiers(&root, &frontiers, OverwritePolicy::Replace, 4)
+                .expect_err("missing parent must fail");
+
+        match err {
+            UnixFsError::InvalidState("missing prepared parent directory during setup") => {}
+            other => panic!("unexpected error: {other}"),
+        }
     }
 
     #[test]

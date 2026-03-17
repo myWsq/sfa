@@ -34,6 +34,7 @@ For setup-vs-scatter diagnosis on small-file workloads, use a representative tem
 - `phase_breakdown.scatter` explains worker busy time, which can overlap across threads.
 - diagnostics fields such as `directory_open_ns`, `file_open_ns`, and `write_ns` explain whether the hotspot is dominated by filesystem syscall work rather than decode.
 - after setup-side directory prewarming, `directory_open_ns` may legitimately fall to zero; use `dir_cache_hits`/`dir_cache_misses` together with `file_open_ns` to understand whether scatter is still paying for parent-directory discovery.
+- repeated unpack runs can warm filesystem caches during setup measurement; for thread comparisons, either warm all runs consistently or alternate run order so cache effects are not misread as setup parallelism gains.
 
 Recommended commands:
 

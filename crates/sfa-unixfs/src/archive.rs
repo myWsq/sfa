@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::ffi::OsString;
 use std::fs::{self, File};
 use std::io::Read;
@@ -27,7 +27,7 @@ use crate::error::UnixFsError;
 use crate::path::ensure_safe_relative_path;
 use crate::restore::{
     ConcurrentFileWriter, EntryMetadata, LocalRestorer, PreparedRegularFile, RestorePolicy,
-    RestoreTarget, Restorer, prepare_regular_descriptor,
+    RestoreTarget, Restorer, materialize_directory_frontiers, prepare_regular_descriptor,
 };
 use crate::scan::{EntryKind, ScannedEntry, scan_tree};
 
@@ -42,6 +42,12 @@ struct BundleExtent {
 }
 
 type BundleExtents = Arc<[BundleExtent]>;
+
+#[derive(Debug, Default)]
+struct DirectorySetupPlan {
+    finalize_order: Vec<RestoreTarget>,
+    frontiers: Vec<Vec<PathBuf>>,
+}
 
 #[derive(Debug)]
 struct FrameWorkItem {
@@ -289,17 +295,18 @@ fn unpack_reader_to_dir_internal<R: Read>(
     let restore_targets = build_restore_targets(&manifest)?;
     let mut restorer = LocalRestorer::new(output_dir.to_path_buf(), restore_policy);
     let manifest_ms = elapsed_ms(manifest_started.elapsed());
-
-    for (entry_id, entry) in manifest.entries.iter().enumerate() {
-        if matches!(entry.kind, CoreEntryKind::Directory) {
-            restorer.create_dir(&restore_targets[entry_id])?;
-        }
-    }
+    let directory_setup = build_directory_setup_plan(&manifest, &restore_targets);
+    restorer.set_dir_finalize_order(directory_setup.finalize_order);
+    let prepared_directories = materialize_directory_frontiers(
+        output_dir,
+        &directory_setup.frontiers,
+        restore_policy.overwrite,
+        threads,
+    )?;
 
     let regular_file_paths = prepare_regular_files(&manifest, &restore_targets, &mut restorer)?;
     let single_extent_regular_entries = regular_single_extent_entries(&manifest);
     let bundle_extents = group_extents_by_bundle(&manifest);
-    let prepared_directories = restorer.take_prepared_directories();
     let file_writer = ConcurrentFileWriter::new(
         output_dir.to_path_buf(),
         regular_file_paths,
@@ -326,11 +333,7 @@ fn unpack_reader_to_dir_internal<R: Read>(
 
     let restore_started = Instant::now();
     let pipeline_duration = restore_started.duration_since(pipeline_started);
-    let directory_count = manifest
-        .entries
-        .iter()
-        .filter(|entry| matches!(entry.kind, CoreEntryKind::Directory))
-        .count() as u64;
+    let directory_count = directory_setup.frontiers.iter().flatten().count() as u64;
     for (entry_id, entry) in manifest.entries.iter().enumerate() {
         if matches!(entry.kind, CoreEntryKind::Regular) && entry.size > 0 && entry.extent_count > 1
         {
@@ -552,6 +555,35 @@ fn group_extents_by_bundle(manifest: &sfa_core::Manifest) -> HashMap<u64, Bundle
         .into_iter()
         .map(|(bundle_id, extents)| (bundle_id, Arc::<[BundleExtent]>::from(extents)))
         .collect()
+}
+
+fn build_directory_setup_plan(
+    manifest: &sfa_core::Manifest,
+    restore_targets: &[RestoreTarget],
+) -> DirectorySetupPlan {
+    let mut finalize_order = Vec::new();
+    let mut by_depth = BTreeMap::<usize, Vec<PathBuf>>::new();
+    let mut seen = HashSet::new();
+
+    for (entry_id, entry) in manifest.entries.iter().enumerate() {
+        if !matches!(entry.kind, CoreEntryKind::Directory) {
+            continue;
+        }
+        let target = restore_targets[entry_id].clone();
+        finalize_order.push(target.clone());
+        if seen.insert(target.relative_path.clone()) {
+            let depth = target.relative_path.components().count();
+            by_depth
+                .entry(depth)
+                .or_default()
+                .push(target.relative_path);
+        }
+    }
+
+    DirectorySetupPlan {
+        finalize_order,
+        frontiers: by_depth.into_values().collect(),
+    }
 }
 
 fn prepare_regular_files(
@@ -1327,6 +1359,14 @@ mod tests {
             diagnostics.pipeline.decode_dispatch_wait_count,
             unpack_stats.bundle_count
         );
+        assert!(
+            unpack_stats
+                .wall_breakdown
+                .setup_ms
+                .value
+                .unwrap_or_default()
+                > 0
+        );
         assert!(diagnostics.scatter.dir_cache_hits > 0);
         assert!(diagnostics.scatter.dir_cache_hits + diagnostics.scatter.dir_cache_misses > 0);
         assert!(diagnostics.scatter.file_open_ns > 0);
@@ -1343,6 +1383,61 @@ mod tests {
             fs::read_to_string(out.join("pkg-000/nested/file-00.txt")).unwrap(),
             format!("pkg={};file={};{}\n", 0, 0, "x".repeat(160))
         );
+    }
+
+    #[test]
+    fn unpack_parallel_directory_setup_handles_narrow_tree_with_high_thread_count() {
+        let src = TempDir::new().unwrap();
+        let dst = TempDir::new().unwrap();
+        let archive = src.path().join("sample.sfa");
+        let nested = src.path().join("a/b/c/d/e");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(nested.join("payload.txt"), b"narrow tree").unwrap();
+
+        let pack_config = PackConfig {
+            codec: sfa_core::config::DataCodec::Zstd,
+            bundle_target_bytes: 1024,
+            small_file_threshold: 4096,
+            ..PackConfig::default()
+        };
+        pack_directory(src.path(), &archive, &pack_config).unwrap();
+
+        let unpack_config = UnpackConfig {
+            threads: Some(8),
+            ..UnpackConfig::default()
+        };
+        let out = dst.path().join("out");
+        unpack_archive(&archive, &out, &unpack_config).unwrap();
+
+        assert_eq!(
+            fs::read(out.join("a/b/c/d/e/payload.txt")).unwrap(),
+            b"narrow tree"
+        );
+    }
+
+    #[test]
+    fn unpack_parallel_directory_setup_replaces_preexisting_leaf_entry() {
+        let src = TempDir::new().unwrap();
+        let dst = TempDir::new().unwrap();
+        let archive = src.path().join("sample.sfa");
+        let nested = src.path().join("pkg");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(nested.join("data.txt"), b"payload").unwrap();
+        pack_directory(src.path(), &archive, &PackConfig::default()).unwrap();
+
+        let out = dst.path().join("out");
+        fs::create_dir_all(&out).unwrap();
+        fs::write(out.join("pkg"), b"stale file").unwrap();
+
+        let unpack_config = UnpackConfig {
+            threads: Some(4),
+            overwrite: sfa_core::config::OverwritePolicy::Replace,
+            ..UnpackConfig::default()
+        };
+        unpack_archive(&archive, &out, &unpack_config).unwrap();
+
+        assert!(out.join("pkg").is_dir());
+        assert_eq!(fs::read(out.join("pkg/data.txt")).unwrap(), b"payload");
     }
 
     #[test]
