@@ -1,8 +1,11 @@
 # Benchmark Results
 
 This directory stores committed machine-readable benchmark results for the default SFA v1 matrix.
-The committed JSON schema includes command wall-time for every record, SFA phase breakdowns for `sfa` commands, and `wait4/getrusage`-based CPU / RSS observations on supported Unix hosts.
-Unpack phase breakdowns are recorded as `header`, `manifest`, `frame_read`, `decode`, `scatter`, and `restore_finalize`; these are pipelined diagnostic windows rather than a simple additive timing ledger.
+The committed JSON schema includes command wall-time for every record, SFA timing breakdowns for `sfa` commands, and `wait4/getrusage`-based CPU / RSS observations on supported Unix hosts.
+Unpack timing is stored in two views:
+
+- `wall_breakdown`: additive `setup`, `pipeline`, and `finalize` buckets that should sum to the unpack command `duration_ms`
+- `phase_breakdown`: `header`, `manifest`, `frame_read`, `decode`, `scatter`, and `restore_finalize` diagnostic windows for the pipelined restore path
 
 Current committed baseline:
 

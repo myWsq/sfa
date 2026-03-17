@@ -9,6 +9,7 @@ use sfa_core::{
     DataCodec as CoreDataCodec, IntegrityMode as CoreIntegrityMode,
     OverwritePolicy as CoreOverwritePolicy, PackConfig, PackPhaseBreakdown, PackStats,
     RestoreOwnerPolicy as CoreRestoreOwnerPolicy, UnpackConfig, UnpackPhaseBreakdown, UnpackStats,
+    UnpackWallBreakdown,
 };
 use sfa_unixfs::UnixFsError;
 use walkdir::WalkDir;
@@ -152,6 +153,7 @@ impl ArchiveService for RealArchiveService {
             .as_ref()
             .map(map_archive_codec)
             .unwrap_or(DataCodec::Lz4);
+        let unavailable_note = "dry-run does not measure execution phases";
         Ok(UnpackStats {
             codec: codec.as_str().to_string(),
             threads,
@@ -160,9 +162,8 @@ impl ArchiveService for RealArchiveService {
             raw_bytes: archive_size,
             encoded_bytes: archive_size,
             duration_ms: elapsed_ms(start.elapsed()),
-            phase_breakdown: UnpackPhaseBreakdown::unavailable(
-                "dry-run does not measure execution phases",
-            ),
+            wall_breakdown: UnpackWallBreakdown::unavailable(unavailable_note),
+            phase_breakdown: UnpackPhaseBreakdown::unavailable(unavailable_note),
         })
     }
 }

@@ -7,7 +7,7 @@ use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crossbeam_channel::{SendError, bounded};
 use rayon::prelude::*;
@@ -19,7 +19,7 @@ use sfa_core::integrity::{frame_hash, trailer_hash};
 use sfa_core::model::{EntryKind as CoreEntryKind, PlannerInputEntry};
 use sfa_core::{
     EncodedFrame, FrameHeaderV1, ObservedMetric, PackPhaseBreakdown, PackStats,
-    UnpackPhaseBreakdown, UnpackStats, plan_archive,
+    UnpackPhaseBreakdown, UnpackStats, UnpackWallBreakdown, plan_archive,
 };
 
 use crate::diagnostics::{UnpackDiagnostics, UnpackDiagnosticsCollector};
@@ -52,7 +52,7 @@ struct FrameWorkItem {
 
 #[derive(Debug, Default, Clone, Copy)]
 struct DecodePhaseTotals {
-    decode_ms: u64,
+    decode: Duration,
 }
 
 #[derive(Debug)]
@@ -64,7 +64,7 @@ struct DecodedBundleTask {
 
 #[derive(Debug, Default, Clone, Copy)]
 struct ScatterPhaseTotals {
-    scatter_ms: u64,
+    scatter: Duration,
 }
 
 #[derive(Debug, Default)]
@@ -72,9 +72,9 @@ struct UnpackPipelineOutcome {
     total_raw_bytes: u64,
     total_encoded_bytes: u64,
     trailer_input: Vec<u8>,
-    frame_read_ms: u64,
-    decode_ms: u64,
-    scatter_ms: u64,
+    frame_read: Duration,
+    decode: Duration,
+    scatter: Duration,
 }
 
 #[cfg(test)]
@@ -313,6 +313,8 @@ fn unpack_reader_to_dir_internal<R: Read>(
         threads,
         diagnostics.clone(),
     );
+    let pipeline_started = Instant::now();
+    let setup_duration = pipeline_started.duration_since(started);
     let pipeline = run_unpack_pipeline(
         &mut archive,
         &header,
@@ -326,6 +328,7 @@ fn unpack_reader_to_dir_internal<R: Read>(
     )?;
 
     let restore_started = Instant::now();
+    let pipeline_duration = restore_started.duration_since(pipeline_started);
     let directory_count = manifest
         .entries
         .iter()
@@ -393,7 +396,10 @@ fn unpack_reader_to_dir_internal<R: Read>(
             return Err(err);
         }
     }
+    let total_duration = started.elapsed();
     let restore_finalize_ms = elapsed_ms(restore_started.elapsed());
+    let wall_breakdown =
+        UnpackWallBreakdown::from_total_duration(total_duration, setup_duration, pipeline_duration);
     let encoded_bytes = sfa_core::HEADER_LEN as u64
         + header.manifest_encoded_len
         + pipeline.total_encoded_bytes
@@ -405,7 +411,7 @@ fn unpack_reader_to_dir_internal<R: Read>(
         };
 
     Ok(UnpackStats::from_duration(
-        started.elapsed(),
+        total_duration,
         UnpackStats {
             codec: format!("{:?}", header.data_codec).to_lowercase(),
             threads,
@@ -414,12 +420,13 @@ fn unpack_reader_to_dir_internal<R: Read>(
             raw_bytes: pipeline.total_raw_bytes,
             encoded_bytes,
             duration_ms: 0,
+            wall_breakdown,
             phase_breakdown: UnpackPhaseBreakdown {
                 header_ms: ObservedMetric::measured(header_ms),
                 manifest_ms: ObservedMetric::measured(manifest_ms),
-                frame_read_ms: ObservedMetric::measured(pipeline.frame_read_ms),
-                decode_ms: ObservedMetric::measured(pipeline.decode_ms),
-                scatter_ms: ObservedMetric::measured(pipeline.scatter_ms),
+                frame_read_ms: ObservedMetric::measured(elapsed_ms(pipeline.frame_read)),
+                decode_ms: ObservedMetric::measured(elapsed_ms(pipeline.decode)),
+                scatter_ms: ObservedMetric::measured(elapsed_ms(pipeline.scatter)),
                 restore_finalize_ms: ObservedMetric::measured(restore_finalize_ms),
             },
         },
@@ -646,8 +653,8 @@ fn run_unpack_pipeline<R: std::io::Read>(
                         single_extent_regular_entries,
                         diagnostics.as_deref(),
                     ) {
-                        Ok(scatter_ms) => {
-                            totals.scatter_ms = totals.scatter_ms.saturating_add(scatter_ms);
+                        Ok(scatter) => {
+                            totals.scatter = saturating_duration_add(totals.scatter, scatter);
                         }
                         Err(err) => {
                             failed.store(true, Ordering::Relaxed);
@@ -681,8 +688,8 @@ fn run_unpack_pipeline<R: std::io::Read>(
                         break;
                     }
                     match process_decode_task(task, codec, hash_algo, worker_probe.as_deref()) {
-                        Ok((decoded_task, decode_ms)) => {
-                            totals.decode_ms = totals.decode_ms.saturating_add(decode_ms);
+                        Ok((decoded_task, decode)) => {
+                            totals.decode = saturating_duration_add(totals.decode, decode);
                             let wait_started = Instant::now();
                             let send_result = worker_tx.send(decoded_task);
                             let wait_duration = wait_started.elapsed();
@@ -724,9 +731,8 @@ fn run_unpack_pipeline<R: std::io::Read>(
             }
             let frame_started = Instant::now();
             let frame = archive.next_frame()?;
-            outcome.frame_read_ms = outcome
-                .frame_read_ms
-                .saturating_add(elapsed_ms(frame_started.elapsed()));
+            outcome.frame_read =
+                saturating_duration_add(outcome.frame_read, frame_started.elapsed());
             let Some(frame) = frame else {
                 break;
             };
@@ -782,13 +788,13 @@ fn run_unpack_pipeline<R: std::io::Read>(
             let totals = handle
                 .join()
                 .map_err(|_| UnixFsError::InvalidState("decode worker panicked"))?;
-            outcome.decode_ms = outcome.decode_ms.saturating_add(totals.decode_ms);
+            outcome.decode = saturating_duration_add(outcome.decode, totals.decode);
         }
         for handle in scatter_handles {
             let totals = handle
                 .join()
                 .map_err(|_| UnixFsError::InvalidState("scatter worker panicked"))?;
-            outcome.scatter_ms = outcome.scatter_ms.saturating_add(totals.scatter_ms);
+            outcome.scatter = saturating_duration_add(outcome.scatter, totals.scatter);
         }
         Ok(())
     })?;
@@ -805,7 +811,7 @@ fn process_decode_task(
     codec: sfa_core::config::DataCodec,
     hash_algo: FrameHashAlgo,
     probe: Option<&UnpackProbe>,
-) -> Result<(DecodedBundleTask, u64), UnixFsError> {
+) -> Result<(DecodedBundleTask, Duration), UnixFsError> {
     let decode_started = Instant::now();
     let raw = decode_data(codec, &task.payload, task.header.raw_len as usize)?;
     let expected_hash = frame_hash(hash_algo, &raw);
@@ -815,7 +821,7 @@ fn process_decode_task(
         }
         .into());
     }
-    let decode_ms = elapsed_ms(decode_started.elapsed());
+    let decode = decode_started.elapsed();
     if let Some(probe) = probe {
         probe.record_decode_call();
     }
@@ -826,7 +832,7 @@ fn process_decode_task(
             raw,
             extents: task.extents,
         },
-        decode_ms,
+        decode,
     ))
 }
 
@@ -836,7 +842,7 @@ fn process_scatter_task(
     restore_targets: &[RestoreTarget],
     single_extent_regular_entries: &[bool],
     _diagnostics: Option<&UnpackDiagnosticsCollector>,
-) -> Result<u64, UnixFsError> {
+) -> Result<Duration, UnixFsError> {
     let _bundle_id = task.bundle_id;
     let scatter_started = Instant::now();
     for extent in task.extents.iter() {
@@ -856,7 +862,7 @@ fn process_scatter_task(
             file_writer.write_extent(extent.entry_id, extent.file_offset, &task.raw[start..end])?;
         }
     }
-    Ok(elapsed_ms(scatter_started.elapsed()))
+    Ok(scatter_started.elapsed())
 }
 
 fn extract_slice(arena: &[u8], off: u32, len: u32) -> &[u8] {
@@ -882,6 +888,10 @@ fn verify_trailer(
 
 fn elapsed_ms(duration: std::time::Duration) -> u64 {
     duration.as_millis().min(u128::from(u64::MAX)) as u64
+}
+
+fn saturating_duration_add(lhs: Duration, rhs: Duration) -> Duration {
+    lhs.checked_add(rhs).unwrap_or(Duration::MAX)
 }
 
 fn summarize_bundle_extents(extents: &[BundleExtent]) -> (usize, usize) {
@@ -1216,6 +1226,70 @@ mod tests {
         assert_eq!(probe.worker_threads_started, 3);
         assert_eq!(probe.decode_calls as u64, unpack_stats.bundle_count);
         assert_eq!(fs::read(out.join("file-0.txt")).unwrap(), vec![b'a'; 96]);
+    }
+
+    #[test]
+    fn unpack_phase_breakdown_accumulates_sub_ms_bundle_work_before_truncation() {
+        let src = TempDir::new().unwrap();
+        let dst = TempDir::new().unwrap();
+        let archive = src.path().join("sample.sfa");
+
+        for idx in 0..512 {
+            let path = src.path().join(format!("file-{idx:04}.bin"));
+            let payload = (0..1536)
+                .map(|offset| (idx as u8).wrapping_add(offset as u8))
+                .collect::<Vec<_>>();
+            fs::write(path, payload).unwrap();
+        }
+
+        let pack_config = PackConfig {
+            codec: sfa_core::config::DataCodec::Zstd,
+            bundle_target_bytes: 2048,
+            small_file_threshold: 4096,
+            ..PackConfig::default()
+        };
+        let pack_stats = pack_directory(src.path(), &archive, &pack_config).unwrap();
+        assert!(pack_stats.bundle_count >= 256);
+
+        let out = dst.path().join("out");
+        let unpack_stats = unpack_archive(&archive, &out, &UnpackConfig::default()).unwrap();
+        let wall_breakdown = &unpack_stats.wall_breakdown;
+
+        assert_eq!(
+            wall_breakdown.setup_ms.value.unwrap_or_default()
+                + wall_breakdown.pipeline_ms.value.unwrap_or_default()
+                + wall_breakdown.finalize_ms.value.unwrap_or_default(),
+            unpack_stats.duration_ms
+        );
+        assert_eq!(
+            wall_breakdown.setup_ms.status,
+            sfa_core::ObservationStatus::Measured
+        );
+        assert_eq!(
+            wall_breakdown.pipeline_ms.status,
+            sfa_core::ObservationStatus::Measured
+        );
+        assert_eq!(
+            wall_breakdown.finalize_ms.status,
+            sfa_core::ObservationStatus::Measured
+        );
+
+        assert!(
+            unpack_stats
+                .phase_breakdown
+                .decode_ms
+                .value
+                .unwrap_or_default()
+                > 0
+        );
+        assert!(
+            unpack_stats
+                .phase_breakdown
+                .scatter_ms
+                .value
+                .unwrap_or_default()
+                > 0
+        );
     }
 
     #[test]

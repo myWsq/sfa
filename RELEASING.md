@@ -108,12 +108,13 @@ If benchmark evidence is part of the release claim, also confirm that the commit
 
 - `environment.resource_sampler` aligned with the documented support environment
 - Command wall-time for each execution record
-- Phase-level `sfa_stats` for SFA runs
+- Pack phase-level `sfa_stats` for SFA runs, plus unpack additive `wall_breakdown` and diagnostic `phase_breakdown`
 - `user_cpu_ms`, `system_cpu_ms`, and `max_rss_kib` where the support environment provides them
-- Unpack `sfa_stats` fields named `header`, `manifest`, `frame_read`, `decode`, `scatter`, and `restore_finalize`, rather than the older `decode_and_scatter`
+- Unpack additive `sfa_stats.wall_breakdown` fields named `setup`, `pipeline`, and `finalize`
+- Unpack diagnostic `sfa_stats.phase_breakdown` fields named `header`, `manifest`, `frame_read`, `decode`, `scatter`, and `restore_finalize`, rather than the older `decode_and_scatter`
 - A preserved effective thread count when the release affects unpack pipeline behavior or `--threads` semantics
 
-When documenting unpack timings, treat split unpack phases as diagnostic windows in a parallel pipeline rather than as values that must sum directly to total wall-time.
+When documenting unpack timings, treat `wall_breakdown` as the additive wall-time accounting view and `phase_breakdown` as the pipelined diagnostic view rather than as values that must all sum directly to total wall-time.
 
 ### 4. Prepare Release Notes
 

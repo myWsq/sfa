@@ -24,5 +24,5 @@ pub use model::{
 pub use planner::{PlannedArchive, plan_archive};
 pub use stats::{
     ObservationStatus, ObservedMetric, PackPhaseBreakdown, PackStats, UnpackPhaseBreakdown,
-    UnpackStats,
+    UnpackStats, UnpackWallBreakdown,
 };

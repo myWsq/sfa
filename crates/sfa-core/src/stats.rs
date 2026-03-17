@@ -82,6 +82,45 @@ impl UnpackPhaseBreakdown {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct UnpackWallBreakdown {
+    pub setup_ms: ObservedMetric,
+    pub pipeline_ms: ObservedMetric,
+    pub finalize_ms: ObservedMetric,
+}
+
+impl UnpackWallBreakdown {
+    pub fn unavailable(note: impl Into<String>) -> Self {
+        let note = note.into();
+        Self {
+            setup_ms: ObservedMetric::unavailable(note.clone()),
+            pipeline_ms: ObservedMetric::unavailable(note.clone()),
+            finalize_ms: ObservedMetric::unavailable(note),
+        }
+    }
+
+    pub fn from_total_duration(
+        total_duration: Duration,
+        setup_duration: Duration,
+        pipeline_duration: Duration,
+    ) -> Self {
+        let total_ms = duration_millis(total_duration);
+        let setup_ms = duration_millis(setup_duration).min(total_ms);
+        let remaining_after_setup = total_ms.saturating_sub(setup_ms);
+        let pipeline_ms = duration_millis(pipeline_duration).min(remaining_after_setup);
+        let finalize_ms = total_ms
+            .saturating_sub(setup_ms)
+            .saturating_sub(pipeline_ms);
+
+        Self {
+            setup_ms: ObservedMetric::measured(setup_ms),
+            pipeline_ms: ObservedMetric::measured(pipeline_ms),
+            finalize_ms: ObservedMetric::measured(finalize_ms),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PackStats {
     pub codec: String,
@@ -128,6 +167,8 @@ pub struct UnpackStats {
     pub encoded_bytes: u64,
     pub duration_ms: u64,
     #[serde(default)]
+    pub wall_breakdown: UnpackWallBreakdown,
+    #[serde(default)]
     pub phase_breakdown: UnpackPhaseBreakdown,
 }
 
@@ -158,12 +199,15 @@ fn duration_millis(duration: Duration) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{ObservationStatus, PackPhaseBreakdown, UnpackPhaseBreakdown};
+    use std::time::Duration;
+
+    use super::{ObservationStatus, PackPhaseBreakdown, UnpackPhaseBreakdown, UnpackWallBreakdown};
 
     #[test]
     fn unavailable_phase_breakdowns_mark_all_phases_unavailable() {
         let pack = PackPhaseBreakdown::unavailable("dry-run");
         let unpack = UnpackPhaseBreakdown::unavailable("dry-run");
+        let unpack_wall = UnpackWallBreakdown::unavailable("dry-run");
 
         assert_eq!(pack.scan_ms.status, ObservationStatus::Unavailable);
         assert_eq!(pack.write_ms.note.as_deref(), Some("dry-run"));
@@ -172,5 +216,20 @@ mod tests {
         assert_eq!(unpack.decode_ms.status, ObservationStatus::Unavailable);
         assert_eq!(unpack.scatter_ms.status, ObservationStatus::Unavailable);
         assert_eq!(unpack.restore_finalize_ms.note.as_deref(), Some("dry-run"));
+        assert_eq!(unpack_wall.setup_ms.status, ObservationStatus::Unavailable);
+        assert_eq!(unpack_wall.finalize_ms.note.as_deref(), Some("dry-run"));
+    }
+
+    #[test]
+    fn wall_breakdown_reconciles_to_total_duration() {
+        let wall = UnpackWallBreakdown::from_total_duration(
+            Duration::from_millis(17),
+            Duration::from_millis(5),
+            Duration::from_millis(8),
+        );
+
+        assert_eq!(wall.setup_ms.value, Some(5));
+        assert_eq!(wall.pipeline_ms.value, Some(8));
+        assert_eq!(wall.finalize_ms.value, Some(4));
     }
 }

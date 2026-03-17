@@ -97,6 +97,22 @@ fn unpack_dry_run_with_file_archive_reports_json_stats() {
     assert_eq!(json["encoded_bytes"].as_u64(), Some(archive_size));
     assert!(json["threads"].as_u64().unwrap_or(0) >= 1);
     assert!(json["bundle_count"].as_u64().unwrap_or(0) >= 1);
+    assert_eq!(
+        json["wall_breakdown"]["setup_ms"]["status"].as_str(),
+        Some("unavailable")
+    );
+    assert_eq!(
+        json["wall_breakdown"]["pipeline_ms"]["status"].as_str(),
+        Some("unavailable")
+    );
+    assert_eq!(
+        json["wall_breakdown"]["finalize_ms"]["note"].as_str(),
+        Some("dry-run does not measure execution phases")
+    );
+    assert_eq!(
+        json["phase_breakdown"]["decode_ms"]["status"].as_str(),
+        Some("unavailable")
+    );
 }
 
 #[test]

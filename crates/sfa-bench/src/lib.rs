@@ -75,6 +75,13 @@ mod tests {
         assert!(report.records.iter().all(|record| match &record.sfa_stats {
             Some(SfaCommandStats::Unpack(stats)) => {
                 stats.threads > 0
+                    && stats.wall_breakdown.setup_ms.value.is_some()
+                    && stats.wall_breakdown.pipeline_ms.value.is_some()
+                    && stats.wall_breakdown.finalize_ms.value.is_some()
+                    && stats.wall_breakdown.setup_ms.value.unwrap_or_default()
+                        + stats.wall_breakdown.pipeline_ms.value.unwrap_or_default()
+                        + stats.wall_breakdown.finalize_ms.value.unwrap_or_default()
+                        == stats.duration_ms
                     && stats.phase_breakdown.frame_read_ms.value.is_some()
                     && stats.phase_breakdown.decode_ms.value.is_some()
                     && stats.phase_breakdown.scatter_ms.value.is_some()

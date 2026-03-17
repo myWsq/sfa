@@ -16,15 +16,16 @@
 - Run on `small-text`, `small-binary`, and `large-control` datasets
 - Use committed input datasets under `tests/fixtures/datasets/<name>/input`
 - Record machine-readable execution metadata under `benches/results/`, including the runner invocation, host/tool versions, dataset summaries, per-command wall time, and runner-level resource sampling metadata
-- For SFA commands, record machine-readable pack / unpack stats including phase breakdowns for `scan`, `plan`, `encode`, `write`, `header`, `manifest`, `frame_read`, `decode`, `scatter`, and `restore_finalize`
+- For SFA commands, record machine-readable pack / unpack stats including pack phase breakdowns for `scan`, `plan`, `encode`, and `write`, plus unpack additive `wall_breakdown` buckets for `setup`, `pipeline`, and `finalize` and unpack diagnostic phase breakdowns for `header`, `manifest`, `frame_read`, `decode`, `scatter`, and `restore_finalize`
 - On supported Unix benchmark hosts, record command-level `user_cpu_ms`, `system_cpu_ms`, and `max_rss_kib` observations derived from `wait4/getrusage`
 - Treat `benches/results/baseline-v0.1.0.json` as the current repository baseline for SFA v1
 
 ## Runner
 
 `crates/sfa-bench/src/bin/tar_vs_sfa.rs` is the current benchmark runner entrypoint.
-The runner requests `--stats-format json` from `sfa-cli` so it can persist structured SFA phase timing alongside command wall-time.
-For unpack, the split phase fields are diagnostic windows for a pipelined restore path; they are not required to sum to the total command wall-time.
+The runner requests `--stats-format json` from `sfa-cli` so it can persist structured SFA timing alongside command wall-time.
+For unpack, `wall_breakdown` is the additive wall-time accounting view and its serialized buckets should sum to the total command `duration_ms`.
+For unpack, the split `phase_breakdown` fields remain diagnostic windows for a pipelined restore path; they are not required to sum to the total command wall-time.
 When `sfa unpack` is run with an explicit `--threads` override, the resulting stats and benchmark records should preserve that effective worker count for later comparison.
 Real-world thread sweeps on large small-file corpora remain diagnostic evidence, not correctness proofs; when they regress against the previous known baseline, keep the results for analysis and do not silently treat the change as performance-accepted.
 
