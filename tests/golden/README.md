@@ -5,5 +5,7 @@ Protocol fixture assets live under [tests/fixtures/golden](/Users/bytedance/gith
 Current canonical fixture set:
 
 - `small-tree-lz4-strong`: a small aggregated tree with nested directories, an empty file, and a symlink, packed with `lz4` data frames and `strong` integrity.
+- `link-tree-zstd-fast`: a small link-oriented tree with a hardlink peer and a symlink, packed with `zstd` data frames and `fast` integrity.
+- `multi-bundle-lz4-off`: a deterministic small-file corpus forced across multiple aggregate bundles with `integrity=off`.
 
 These fixtures are consumed by `tests/scripts/run_protocol_smoke.sh` and anchor the frozen SFA v1 wire format.

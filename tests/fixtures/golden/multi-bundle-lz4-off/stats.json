@@ -1,0 +1,20 @@
+{
+  "archive_bytes": 829,
+  "version_major": 1,
+  "version_minor": 0,
+  "data_codec": "lz4",
+  "manifest_codec": "zstd",
+  "integrity_mode": "off",
+  "frame_hash_algo": "xxh3_64",
+  "manifest_hash_algo": "blake3_256",
+  "feature_flags": [],
+  "entry_count": 6,
+  "extent_count": 4,
+  "bundle_count": 4,
+  "frame_count": 4,
+  "manifest_raw_len": 946,
+  "manifest_encoded_len": 185,
+  "total_frame_raw_bytes": 316,
+  "total_frame_encoded_bytes": 324,
+  "has_trailer": false
+}

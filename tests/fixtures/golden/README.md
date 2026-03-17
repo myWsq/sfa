@@ -21,4 +21,13 @@ Required conventions:
 - `stats.json` is the committed summary snapshot paired with `manifest.json`.
 - `README.md` records the fixed generation parameters and what protocol behavior the fixture is intended to freeze.
 
+The canonical corpus is representative rather than exhaustive. The committed fixture set should collectively cover:
+
+- every data codec exposed by the v1 writer CLI
+- every integrity mode exposed by the v1 CLI (`off`, `fast`, `strong`)
+- at least one archive whose manifest produces more than one bundle / `DataFrame`
+- the currently supported Unix entry semantics for regular files, directories, symlinks, and hardlinks
+
+Each fixture README should call out which of those dimensions it is responsible for, so reviewers can understand why the fixture belongs in the frozen corpus.
+
 Use `tests/scripts/generate_golden_fixture.sh` to regenerate fixture outputs from a committed `input/` tree. A fixture update that changes `archive.sfa`, `manifest.json`, or `stats.json` is a protocol-significant change and should be reviewed against `spec/format-v1.md` and `spec/format-v1-freeze-review.md`.

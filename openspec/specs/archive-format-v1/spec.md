@@ -39,11 +39,15 @@ Before the first SFA v1 release, the repository SHALL provide a normative `spec/
 - **THEN** `spec/format-v1.md` is the authoritative protocol reference and no placeholder document is treated as equally normative
 
 ### Requirement: Canonical golden fixtures anchor the frozen wire format
-The repository SHALL include a canonical golden fixture set for SFA v1 under `tests/fixtures/golden/` that contains committed `.sfa` archive assets together with stable decoded metadata and fixture documentation. Each committed fixture MUST identify its input corpus or source tree, fixed generation parameters, and the decoded archive summary used for protocol regression checks.
+The repository SHALL include a canonical golden fixture set for SFA v1 under `tests/fixtures/golden/` that contains committed `.sfa` archive assets together with stable decoded metadata and fixture documentation. The fixture set MUST collectively cover every data codec supported by v1 writers, every integrity mode exposed by the v1 CLI, at least one archive whose manifest restores more than one data frame or bundle, and the v1 Unix entry semantics already supported for regular files, directories, symlinks, and hardlinks. Each committed fixture MUST identify its input corpus or source tree, fixed generation parameters, the protocol dimensions it is intended to cover, and the decoded archive summary used for protocol regression checks.
 
-#### Scenario: Protocol freeze includes a reproducible fixture corpus
-- **WHEN** the first protocol freeze is reviewed
-- **THEN** reviewers can inspect at least one committed golden fixture and its paired decoded metadata without regenerating assets from undocumented inputs
+#### Scenario: Protocol freeze corpus covers the frozen v1 surface
+- **WHEN** a maintainer inspects the committed golden fixture directories in a clean checkout
+- **THEN** they can find representative fixtures that collectively exercise codec, integrity, multi-bundle, and supported Unix-entry coverage without relying on undocumented regeneration steps
+
+#### Scenario: New fixture additions remain reviewable
+- **WHEN** a contributor updates or adds a committed golden fixture
+- **THEN** the fixture directory includes its archive asset, decoded metadata, input tree, and README coverage notes so reviewers can understand why that fixture belongs in the canonical corpus
 
 ### Requirement: Protocol smoke validates frozen fixture assets
 The protocol smoke entrypoint SHALL consume the committed golden fixture set and MUST fail if a required archive asset is missing, if a committed archive cannot be parsed by the current reader, or if the decoded archive summary no longer matches the committed fixture metadata.

@@ -1,0 +1,285 @@
+{
+  "archive_bytes": 829,
+  "header": {
+    "version_major": 1,
+    "version_minor": 0,
+    "writer_version_major": 0,
+    "writer_version_minor": 1,
+    "data_codec": "lz4",
+    "manifest_codec": "zstd",
+    "integrity_mode": "off",
+    "frame_hash_algo": "xxh3_64",
+    "manifest_hash_algo": "blake3_256",
+    "suggested_parallelism": 1,
+    "bundle_target_bytes": 64,
+    "small_file_threshold": 1024,
+    "entry_count": 6,
+    "extent_count": 4,
+    "bundle_count": 4,
+    "manifest_raw_len": 946,
+    "manifest_encoded_len": 185,
+    "feature_flags_bits": 0,
+    "feature_flags": [],
+    "manifest_hash_hex": "3e53c4352ac748c808a44d3e1a75b84d36c08316edc5a46690eb9a2fd03815a0"
+  },
+  "manifest": {
+    "entry_count": 6,
+    "extent_count": 4,
+    "bundle_count": 4,
+    "name_arena_bytes": 50,
+    "meta_blob_bytes": 0,
+    "entries": [
+      {
+        "entry_id": 0,
+        "parent_id": null,
+        "kind": "root",
+        "flags_bits": 0,
+        "flags": [],
+        "path": ".",
+        "name_utf8": "",
+        "name_hex": "",
+        "mode_octal": "0o40755",
+        "uid": 0,
+        "gid": 0,
+        "mtime_sec": 1704067200,
+        "mtime_nsec": 0,
+        "size": 0,
+        "link_target_utf8": null,
+        "link_target_hex": null,
+        "first_extent": 0,
+        "extent_count": 0,
+        "hardlink_master_entry_id": null,
+        "meta_len": 0
+      },
+      {
+        "entry_id": 1,
+        "parent_id": 0,
+        "kind": "directory",
+        "flags_bits": 0,
+        "flags": [],
+        "path": "chunks",
+        "name_utf8": "chunks",
+        "name_hex": "6368756e6b73",
+        "mode_octal": "0o40755",
+        "uid": 0,
+        "gid": 0,
+        "mtime_sec": 1704067200,
+        "mtime_nsec": 0,
+        "size": 192,
+        "link_target_utf8": null,
+        "link_target_hex": null,
+        "first_extent": 0,
+        "extent_count": 0,
+        "hardlink_master_entry_id": null,
+        "meta_len": 0
+      },
+      {
+        "entry_id": 2,
+        "parent_id": 1,
+        "kind": "regular",
+        "flags_bits": 0,
+        "flags": [],
+        "path": "chunks/part-01.txt",
+        "name_utf8": "part-01.txt",
+        "name_hex": "706172742d30312e747874",
+        "mode_octal": "0o100644",
+        "uid": 0,
+        "gid": 0,
+        "mtime_sec": 1704067200,
+        "mtime_nsec": 0,
+        "size": 79,
+        "link_target_utf8": null,
+        "link_target_hex": null,
+        "first_extent": 0,
+        "extent_count": 1,
+        "hardlink_master_entry_id": null,
+        "meta_len": 0
+      },
+      {
+        "entry_id": 3,
+        "parent_id": 1,
+        "kind": "regular",
+        "flags_bits": 0,
+        "flags": [],
+        "path": "chunks/part-02.txt",
+        "name_utf8": "part-02.txt",
+        "name_hex": "706172742d30322e747874",
+        "mode_octal": "0o100644",
+        "uid": 0,
+        "gid": 0,
+        "mtime_sec": 1704067200,
+        "mtime_nsec": 0,
+        "size": 79,
+        "link_target_utf8": null,
+        "link_target_hex": null,
+        "first_extent": 1,
+        "extent_count": 1,
+        "hardlink_master_entry_id": null,
+        "meta_len": 0
+      },
+      {
+        "entry_id": 4,
+        "parent_id": 1,
+        "kind": "regular",
+        "flags_bits": 0,
+        "flags": [],
+        "path": "chunks/part-03.txt",
+        "name_utf8": "part-03.txt",
+        "name_hex": "706172742d30332e747874",
+        "mode_octal": "0o100644",
+        "uid": 0,
+        "gid": 0,
+        "mtime_sec": 1704067200,
+        "mtime_nsec": 0,
+        "size": 79,
+        "link_target_utf8": null,
+        "link_target_hex": null,
+        "first_extent": 2,
+        "extent_count": 1,
+        "hardlink_master_entry_id": null,
+        "meta_len": 0
+      },
+      {
+        "entry_id": 5,
+        "parent_id": 1,
+        "kind": "regular",
+        "flags_bits": 0,
+        "flags": [],
+        "path": "chunks/part-04.txt",
+        "name_utf8": "part-04.txt",
+        "name_hex": "706172742d30342e747874",
+        "mode_octal": "0o100644",
+        "uid": 0,
+        "gid": 0,
+        "mtime_sec": 1704067200,
+        "mtime_nsec": 0,
+        "size": 79,
+        "link_target_utf8": null,
+        "link_target_hex": null,
+        "first_extent": 3,
+        "extent_count": 1,
+        "hardlink_master_entry_id": null,
+        "meta_len": 0
+      }
+    ],
+    "extents": [
+      {
+        "entry_id": 2,
+        "entry_path": "chunks/part-01.txt",
+        "bundle_id": 0,
+        "file_offset": 0,
+        "raw_offset_in_bundle": 0,
+        "raw_len": 79,
+        "flags_bits": 3,
+        "flags": [
+          "last_extent",
+          "aggregate_bundle"
+        ]
+      },
+      {
+        "entry_id": 3,
+        "entry_path": "chunks/part-02.txt",
+        "bundle_id": 1,
+        "file_offset": 0,
+        "raw_offset_in_bundle": 0,
+        "raw_len": 79,
+        "flags_bits": 3,
+        "flags": [
+          "last_extent",
+          "aggregate_bundle"
+        ]
+      },
+      {
+        "entry_id": 4,
+        "entry_path": "chunks/part-03.txt",
+        "bundle_id": 2,
+        "file_offset": 0,
+        "raw_offset_in_bundle": 0,
+        "raw_len": 79,
+        "flags_bits": 3,
+        "flags": [
+          "last_extent",
+          "aggregate_bundle"
+        ]
+      },
+      {
+        "entry_id": 5,
+        "entry_path": "chunks/part-04.txt",
+        "bundle_id": 3,
+        "file_offset": 0,
+        "raw_offset_in_bundle": 0,
+        "raw_len": 79,
+        "flags_bits": 3,
+        "flags": [
+          "last_extent",
+          "aggregate_bundle"
+        ]
+      }
+    ],
+    "bundles": [
+      {
+        "bundle_id": 0,
+        "kind": "aggregate",
+        "raw_len": 79,
+        "file_count": 1,
+        "extent_count": 1,
+        "flags": 0
+      },
+      {
+        "bundle_id": 1,
+        "kind": "aggregate",
+        "raw_len": 79,
+        "file_count": 1,
+        "extent_count": 1,
+        "flags": 0
+      },
+      {
+        "bundle_id": 2,
+        "kind": "aggregate",
+        "raw_len": 79,
+        "file_count": 1,
+        "extent_count": 1,
+        "flags": 0
+      },
+      {
+        "bundle_id": 3,
+        "kind": "aggregate",
+        "raw_len": 79,
+        "file_count": 1,
+        "extent_count": 1,
+        "flags": 0
+      }
+    ]
+  },
+  "frames": [
+    {
+      "bundle_id": 0,
+      "raw_len": 79,
+      "encoded_len": 81,
+      "flags": 0,
+      "frame_hash_hex": "3b4ccabbbb5313a4"
+    },
+    {
+      "bundle_id": 1,
+      "raw_len": 79,
+      "encoded_len": 81,
+      "flags": 0,
+      "frame_hash_hex": "c958803c16546608"
+    },
+    {
+      "bundle_id": 2,
+      "raw_len": 79,
+      "encoded_len": 81,
+      "flags": 0,
+      "frame_hash_hex": "f3b507af62ab0724"
+    },
+    {
+      "bundle_id": 3,
+      "raw_len": 79,
+      "encoded_len": 81,
+      "flags": 0,
+      "frame_hash_hex": "0b0e13f563da8fd5"
+    }
+  ],
+  "trailer": null
+}

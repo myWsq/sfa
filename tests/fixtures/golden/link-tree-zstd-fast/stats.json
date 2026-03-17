@@ -1,0 +1,23 @@
+{
+  "archive_bytes": 556,
+  "version_major": 1,
+  "version_minor": 0,
+  "data_codec": "zstd",
+  "manifest_codec": "zstd",
+  "integrity_mode": "fast",
+  "frame_hash_algo": "xxh3_64",
+  "manifest_hash_algo": "blake3_256",
+  "feature_flags": [
+    "has_symlink",
+    "has_hardlink"
+  ],
+  "entry_count": 7,
+  "extent_count": 2,
+  "bundle_count": 1,
+  "frame_count": 1,
+  "manifest_raw_len": 909,
+  "manifest_encoded_len": 249,
+  "total_frame_raw_bytes": 166,
+  "total_frame_encoded_bytes": 131,
+  "has_trailer": false
+}

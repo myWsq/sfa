@@ -1,0 +1,2 @@
+SFA canonical hardlink master payload.
+This file is shared by a hardlink peer in the same fixture.

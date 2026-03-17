@@ -32,7 +32,7 @@
 2. [ROADMAP.md](ROADMAP.md) 中相关里程碑状态已同步。
 3. 如果发版涉及协议或解码行为变化：
    - `spec/format-v1.md` 已更新
-   - golden fixtures 已更新
+   - golden fixtures 已更新，并保持代表性的 canonical corpus 覆盖
    - 兼容性影响已记录在 release notes 中
 4. 待发布内容已经完成代码 review。
 5. `git status --short` 结果为空，工作区没有未提交或未跟踪变更。
@@ -71,6 +71,7 @@ git status --short
 - [spec/format-v1.md](spec/format-v1.md)
 - [spec/verification-and-benchmark.md](spec/verification-and-benchmark.md)
 - `tests/fixtures/` 下对应样例
+- [tests/golden/README.md](tests/golden/README.md) 与每个 golden fixture README 的覆盖说明
 
 ### 3. 执行质量闸口
 
@@ -172,7 +173,7 @@ git push origin vX.Y.Z
 这类发版必须额外满足：
 
 - `spec/format-v1.md` 与实现一致
-- golden fixture 与 dump 输出已更新
+- golden fixture、dump 输出与 fixture README 覆盖说明已更新
 - release notes 中明确兼容性影响
 
 ## 最小发版清单

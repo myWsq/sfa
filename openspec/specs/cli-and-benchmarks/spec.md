@@ -36,11 +36,11 @@ The project SHALL include benchmark tooling that runs pack and unpack measuremen
 - **THEN** it executes both SFA and `tar + same codec` workflows and stores comparable metrics for each dataset and codec combination
 
 ### Requirement: Test suites cover protocol, streaming, corruption, and safety baselines
-Before the first v1 release, the project SHALL include automated tests for roundtrip correctness, fragmented sequential input, corruption rejection, path safety, and golden archive compatibility.
+Before the first v1 release, the project SHALL include automated tests for roundtrip correctness, fragmented sequential input, corruption rejection, path safety, golden archive compatibility, and CLI behavior regressions for documented defaults, supported input-mode combinations, and expected usage failures.
 
-#### Scenario: CI runs protocol regression coverage
+#### Scenario: CI runs repository verification coverage
 - **WHEN** repository tests are executed in CI
-- **THEN** the suite includes protocol, streaming, corruption, security, and golden-archive cases for the v1 feature set
+- **THEN** the suite includes protocol, streaming, corruption, security, golden-archive, and CLI regression cases for the v1 feature set
 
 ### Requirement: Benchmark datasets are committed and documented for the default matrix
 The repository SHALL provide committed input trees for the default benchmark matrix under `tests/fixtures/datasets/small-text/input`, `tests/fixtures/datasets/small-binary/input`, and `tests/fixtures/datasets/large-control/input`. Each dataset MUST contain real benchmark content rather than placeholders, and each dataset directory MUST include accompanying documentation that identifies the dataset purpose, construction or provenance, and a stable summary of its scale.
@@ -106,4 +106,19 @@ The repository SHALL keep the committed benchmark baseline readable after observ
 #### Scenario: Reviewer audits the current observability baseline
 - **WHEN** a reviewer inspects the committed benchmark baseline and benchmark documentation
 - **THEN** they can determine which records are expected to contain phase and resource observations, how missing values are represented, and when the baseline requires regeneration
+
+### Requirement: CLI regression suite pins default and error-path behavior
+The repository SHALL include automated CLI tests that exercise the documented defaults and common supported combinations for `sfa pack` and `sfa unpack`. These tests MUST cover successful machine-readable stats output under default pack options, missing-input failures, usage-error exit codes, supported `stdin` interactions, and overwrite-related restore behavior that differs from the default safe path.
+
+#### Scenario: Pack dry-run exposes default stats without extra flags
+- **WHEN** a user runs `sfa pack <input-dir> <archive-path> --dry-run --stats-format json`
+- **THEN** the command succeeds and emits machine-readable stats that include the effective default codec, integrity mode, thread count, and bundle-planning fields
+
+#### Scenario: Missing archive path fails before unpack work begins
+- **WHEN** a user runs `sfa unpack ./missing.sfa -C ./out`
+- **THEN** the CLI reports an actionable input-archive failure and exits non-zero instead of fabricating unpack stats
+
+#### Scenario: Existing output requires explicit overwrite intent
+- **WHEN** a user runs `sfa unpack <archive-path> -C <existing-output-root>` and restoration would replace an existing file
+- **THEN** the default command fails non-zero, and the corresponding overwrite-enabled path is covered by automated CLI regression checks
 
