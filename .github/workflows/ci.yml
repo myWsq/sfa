@@ -23,5 +23,7 @@ jobs:
         run: bash tests/scripts/run_safety_smoke.sh
       - name: Roundtrip smoke
         run: bash tests/scripts/run_roundtrip_smoke.sh
+      - name: Distribution smoke
+        run: bash tests/scripts/run_distribution_smoke.sh
       - name: Benchmark dry run
         run: cargo run -p sfa-bench --bin tar_vs_sfa -- --dry-run --output benches/results/latest.json

@@ -79,6 +79,9 @@ jobs:
       - name: Roundtrip smoke
         run: bash tests/scripts/run_roundtrip_smoke.sh
 
+      - name: Distribution smoke
+        run: bash tests/scripts/run_distribution_smoke.sh
+
       - name: Benchmark dry run
         run: cargo run -p sfa-bench --bin tar_vs_sfa -- --dry-run --output benches/results/latest.json
 
@@ -184,3 +187,37 @@ jobs:
           RELEASE_TAG: ${{ needs.verify.outputs.release_tag }}
         run: |
           gh release upload "${RELEASE_TAG}" dist/* --clobber
+
+      - name: Gather published release asset metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.verify.outputs.release_tag }}
+        run: |
+          gh release view "${RELEASE_TAG}" --json assets > dist/release-assets.json
+
+      - name: Validate managed distribution metadata
+        env:
+          SFA_INSTALL_REPO: ${{ github.repository }}
+        run: |
+          bash scripts/release/validate_distribution_assets.sh \
+            --release-tag "${{ needs.verify.outputs.release_tag }}" \
+            --assets-json dist/release-assets.json
+
+      - name: Generate Homebrew formula
+        env:
+          SFA_INSTALL_REPO: ${{ github.repository }}
+        run: |
+          bash scripts/release/generate_homebrew_formula.sh \
+            --release-tag "${{ needs.verify.outputs.release_tag }}" \
+            --assets-json dist/release-assets.json \
+            --output dist/sfa-cli.rb
+
+      - name: Publish Homebrew formula
+        env:
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          HOMEBREW_TAP_REPOSITORY: ${{ vars.HOMEBREW_TAP_REPOSITORY }}
+          SFA_INSTALL_REPO: ${{ github.repository }}
+        run: |
+          bash scripts/release/publish_homebrew_formula.sh \
+            --formula dist/sfa-cli.rb \
+            --release-tag "${{ needs.verify.outputs.release_tag }}"

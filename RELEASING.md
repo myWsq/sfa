@@ -1,6 +1,13 @@
 # SFA Release Process
 
-This document defines the current release process used by the SFA repository. Git tags remain the source of truth for published versions, while GitHub Releases are normally created and updated by the [release workflow](.github/workflows/release.yml) after a version tag is pushed. Manual GitHub Release creation is only a fallback path.
+This document defines the current release process used by the SFA repository.
+Git tags remain the source of truth for published versions, while GitHub
+Releases are normally created and updated by the
+[release workflow](.github/workflows/release.yml) after a version tag is
+pushed. The same workflow also validates the managed install metadata for the
+tagged assets and updates the project-owned Homebrew tap. Manual GitHub Release
+creation remains a fallback path for release publication, and manual tap
+publication remains a fallback path for managed distribution.
 
 ## Scope
 
@@ -8,18 +15,19 @@ The current process covers:
 
 - Repository-level version releases
 - Git tags and GitHub Releases
+- Managed distribution publication for the Homebrew tap and public install script
 - Pre-release validation for protocol behavior, test assets, and benchmark baselines
 
 The current process does not cover:
 
 - crates.io publishing
-- Multi-platform installer distribution
 - macOS notarization or code signing
 
 ## Release Principles
 
 - Every public release must have a traceable Git tag
 - Release contents must match the repository state, roadmap, and protocol documentation
+- Managed install metadata must derive from the uploaded GitHub Release archives and checksum files
 - Protocol-sensitive changes must update code, specs, fixtures, and verification assets together
 - The working tree must be clean before a release
 - Every release must pass the repository-defined quality gates
@@ -36,6 +44,9 @@ Do not start the release process until all of the following are true:
    - Compatibility impact is described in the release notes
 4. The release content has completed code review.
 5. `git status --short` is empty.
+6. Managed distribution publication is configured for the target repository:
+   - `HOMEBREW_TAP_GITHUB_TOKEN` is present as a repository secret with write access to the tap repository
+   - `HOMEBREW_TAP_REPOSITORY` is set as a repository variable if the tap repo is not the default `${owner}/homebrew-sfa`
 
 ## Current Stable Release Train
 
@@ -45,7 +56,8 @@ The current repository release train is preparing the first stable `v1.0.0` rele
 - Candidate revision: the current `main` branch after `v0.3.0`
 - Included post-`v0.3.0` change: unpack directory setup now does more bounded preparation before the worker pipeline begins
 - Extra release-prep requirement: refresh `benches/results/baseline-v0.1.0.json` for the default `node_modules-100k` benchmark path and validate it with `cargo test -p sfa-bench`
-- Deferred from `v1.0.0`: xattrs, ACLs, special-file restore, broader Unix extensions, non-Unix parity, crates.io distribution, and installer / notarization work
+- Managed distribution path for `v1.0.0`: Homebrew tap plus the public `install.sh` installer, both derived from the GitHub Release archives
+- Deferred from `v1.0.0`: xattrs, ACLs, special-file restore, broader Unix extensions, non-Unix parity, crates.io distribution, and notarization work
 
 Exact handoff commands for the current stable release train:
 
@@ -62,6 +74,16 @@ Manual fallback if the workflow cannot publish the release:
 
 ```bash
 gh release create v1.0.0 --verify-tag --title "sfa v1.0.0" --notes-file release-notes/v1.0.0.md
+```
+
+Manual fallback if the release assets are uploaded but the Homebrew tap is not
+updated:
+
+```bash
+gh release view v1.0.0 --json assets > /tmp/release-assets.json
+bash scripts/release/validate_distribution_assets.sh --release-tag v1.0.0 --assets-json /tmp/release-assets.json
+bash scripts/release/generate_homebrew_formula.sh --release-tag v1.0.0 --assets-json /tmp/release-assets.json --output /tmp/sfa-cli.rb
+HOMEBREW_TAP_GITHUB_TOKEN=... bash scripts/release/publish_homebrew_formula.sh --formula /tmp/sfa-cli.rb --release-tag v1.0.0
 ```
 
 ## Standard Release Procedure
@@ -112,6 +134,7 @@ bash tests/scripts/run_protocol_smoke.sh
 bash tests/scripts/run_streaming_smoke.sh
 bash tests/scripts/run_safety_smoke.sh
 bash tests/scripts/run_roundtrip_smoke.sh
+bash tests/scripts/run_distribution_smoke.sh
 cargo run -p sfa-bench --bin tar_vs_sfa -- --dry-run --output benches/results/latest.json
 ```
 
@@ -154,6 +177,7 @@ Each release notes file should cover at least:
 - A short release summary
 - Major additions or fixes
 - Whether protocol behavior changed
+- Whether the managed installation channels or release distribution story changed
 - Verification status
 - Known limitations or follow-up work
 
@@ -190,6 +214,9 @@ After `vX.Y.Z` is pushed, the release workflow will:
 - Read `release-notes/vX.Y.Z.md`
 - Build CLI archives for Linux `x86_64`, macOS `x86_64`, and macOS `arm64`
 - Create or update the GitHub Release and attach the generated archives and checksum files
+- Gather the published release asset metadata and validate that the installer-facing URLs and checksum files resolve those exact uploaded assets
+- Generate `Formula/sfa-cli.rb` for the matching release version
+- Push the updated formula to the project-owned Homebrew tap using the dedicated tap credential
 
 If the release workflow is not yet available, or if a Release must be backfilled for an existing tag, manually trigger `.github/workflows/release.yml` with `workflow_dispatch` and pass the tag name.
 
@@ -204,15 +231,40 @@ The same workflow also uploads:
 - `sfa-vX.Y.Z-aarch64-apple-darwin.tar.gz`
 - Matching `.sha256` checksum files
 
+The workflow also validates and publishes managed distribution metadata:
+
+- `install.sh` URL resolution must match the exact uploaded archive and checksum asset names for the release tag
+- The Homebrew formula must use the GitHub Release asset URLs and SHA-256 digests reported for those uploaded archives
+- The tap repository must receive the updated `Formula/sfa-cli.rb` revision for the released version
+
 If the workflow cannot be used, fall back to:
 
 ```bash
 gh release create vX.Y.Z --verify-tag --title "sfa vX.Y.Z" --notes-file release-notes/vX.Y.Z.md
 ```
 
+Bootstrap the tap repository once before the first automated Homebrew publish if
+it does not already exist. The default tap slug is `${owner}/homebrew-sfa`, so
+for the canonical repository owner the first-time bootstrap is:
+
+```bash
+gh repo create myWsq/homebrew-sfa --public --description "Homebrew tap for sfa-cli"
+```
+
+Once the repository exists, the publish helper can seed or repair it for any
+existing tag:
+
+```bash
+gh release view vX.Y.Z --json assets > /tmp/release-assets.json
+bash scripts/release/validate_distribution_assets.sh --release-tag vX.Y.Z --assets-json /tmp/release-assets.json
+bash scripts/release/generate_homebrew_formula.sh --release-tag vX.Y.Z --assets-json /tmp/release-assets.json --output /tmp/sfa-cli.rb
+HOMEBREW_TAP_GITHUB_TOKEN=... HOMEBREW_TAP_REPOSITORY=myWsq/homebrew-sfa bash scripts/release/publish_homebrew_formula.sh --formula /tmp/sfa-cli.rb --release-tag vX.Y.Z
+```
+
 The public release should make clear:
 
 - Whether the protocol is frozen
+- Which managed installation channels are supported for the tag
 - Recommended use cases
 - Compatibility changes relative to the previous version
 - The roadmap stage represented by the release
@@ -221,6 +273,9 @@ The public release should make clear:
 
 After the release is published, check:
 
+- `gh release view vX.Y.Z` shows the expected archive and checksum assets
+- `brew install myWsq/sfa/sfa-cli` succeeds on a supported host or clean CI runner
+- `sh install.sh --version vX.Y.Z --bin-dir "$(mktemp -d)"` succeeds on a supported host
 - Whether [ROADMAP.md](ROADMAP.md) and [README.md](README.md) need status updates
 - Whether [CHANGELOG.md](CHANGELOG.md) should reopen the next `Unreleased` section
 - Whether protocol evolution requires a new OpenSpec change
@@ -253,3 +308,5 @@ Before publishing, confirm:
 - [ ] The Git tag has been created and pushed
 - [ ] The GitHub Release has been created by the workflow or by manual fallback
 - [ ] Linux and macOS release assets have been uploaded
+- [ ] Managed distribution metadata has been validated against the uploaded assets
+- [ ] The Homebrew tap formula has been published or manually repaired for the released version
