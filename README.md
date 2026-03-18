@@ -1,16 +1,30 @@
 # SFA
 
-Fast archives for Unix directory trees with many small files.
+Small-file archives that leave `tar` behind.
 
-SFA is a CLI and archive format built for `node_modules`-style workloads. On the committed macOS `aarch64` `node-modules-100k` baseline, SFA packs about `34.9x` faster than `tar`, unpacks about `15.9x` faster, and produces an archive about `2.2x` smaller than `tar | zstd --fast=3`.
+```text
++------------------------------+    +------------------------------+
+| tar | zstd --fast=3          |    | SFA                          |
+| one long file stream         |    | manifest + bundle plan first |
+|                              |    |                              |
+| tiny files stay fine-grained |    | tiny files -> bundle A       |
+| restore work emerges late    |    | tiny files -> bundle B       |
+| small-file overhead stays    |    | restore plan known up front  |
+| high                         |    | strict sequential reads      |
++------------------------------+    +------------------------------+
 
-SFA is not a drop-in replacement for `tar`. It is optimized for reliable local pack/unpack workflows where small-file throughput, ordered restore, and safety matter more than `tar` byte compatibility.
+pack:   340.6 s ->  9.8 s    (34.9x faster)
+unpack: 242.2 s -> 15.3 s    (15.9x faster)
+size:    12.3 MiB -> 5.5 MiB (2.2x smaller)
+```
+
+SFA is a CLI and archive format for Unix directory trees with many small files.
 
 ## Why SFA
 
 - Much faster than `tar` on Unix trees dominated by small files
 - Built for `node_modules`, dependency caches, vendored source trees, and generated outputs
-- Packs small files as bundles instead of paying per-file compression overhead
+- Turns many small files into bundle-sized work units
 - Unpacks with strict sequential reads and supports `stdin` input
 - Supports machine-readable stats, integrity validation, and safe restore behavior
 
@@ -104,6 +118,8 @@ SFA is not yet the right fit when you need:
 - Full `tar` format compatibility
 - Fully equivalent behavior on non-Unix platforms
 - Signed or notarized macOS binaries
+
+SFA is not a drop-in replacement for `tar`. It is optimized for reliable local pack/unpack workflows where small-file throughput, ordered restore, and safety matter more than `tar` byte compatibility.
 
 ## Benchmark Snapshot
 
