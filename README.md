@@ -3,19 +3,23 @@
 Small-file archives that leave `tar` behind.
 
 ```text
-tar | zstd --fast=3                      SFA
--------------------                      -----------------------------
-input tree                               input tree
-    |                                        |
-[file][file][file]...                    scan once
-    |                                        |
-one long stream                          manifest + bundle plan
-    |                                        |
-restore plan emerges late                [bundle A] [bundle B] [bundle C]
-    |                                        |
-unpack                                   ordered frames
-                                             |
-                                       sequential unpack
++--------------------------------+    +--------------------------------+
+| tar | zstd --fast=3            |    | SFA                            |
+| long file-by-file stream       |    | manifest + bundles + frames    |
+|                                |    |                                |
+| many tiny files                |    | many tiny files                |
+| [f][f][f][f][f][f]             |    | [f][f][f][f][f][f]            |
+|             |                  |    |             |                  |
+|             v                  |    |         scan once              |
+|      one long stream           |    |             |                  |
+|             |                  |    |  manifest + bundle plan        |
+|             v                  |    |             |                  |
+| restore plan emerges late      |    | [bundle A] [bundle B] [bundle C]
+|             |                  |    |             |                  |
+|           unpack               |    |       ordered frames           |
+|                                |    |             |                  |
+|                                |    |     sequential unpack          |
++--------------------------------+    +--------------------------------+
 ```
 
 On the committed macOS `aarch64` `node-modules-100k` baseline, SFA packs about `34.9x` faster than `tar`, unpacks about `15.9x` faster, and produces an archive about `2.2x` smaller than `tar | zstd --fast=3`.
