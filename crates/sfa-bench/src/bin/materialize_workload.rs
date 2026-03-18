@@ -21,9 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 summary_json = Some(PathBuf::from(value));
             }
             "--help" | "-h" => {
-                println!(
-                    "Usage: materialize_workload --output <dir> [--summary-json <path>]"
-                );
+                println!("Usage: materialize_workload --output <dir> [--summary-json <path>]");
                 return Ok(());
             }
             unknown => {

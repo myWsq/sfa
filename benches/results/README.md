@@ -16,7 +16,7 @@ Recommended command to reproduce the current baseline contract:
 ```bash
 ./benches/scripts/run_tar_vs_sfa.sh \
   --execute \
-  --sfa-bin target/release/sfa-cli \
+  --sfa-bin target/release/sfa \
   --output benches/results/baseline-v0.1.0.json
 ```
 
@@ -35,7 +35,7 @@ Supported environment for the committed result:
 - macOS `aarch64`
 - `/usr/bin/tar` (`bsdtar 3.5.3`)
 - `zstd` `1.5.7`
-- `target/release/sfa-cli` built from this repository
+- `target/release/sfa` built from this repository
 - `wait4/getrusage` available so `user_cpu_ms`, `system_cpu_ms`, and `max_rss_kib` are populated in the result asset
 
 Refresh the committed baseline when:

@@ -1,7 +1,7 @@
 #!/bin/sh
 
 sfa_binary_name() {
-  printf '%s\n' 'sfa-cli'
+  printf '%s\n' 'sfa'
 }
 
 sfa_default_repo() {
@@ -265,13 +265,13 @@ sfa_installer_usage() {
   cat <<'EOF'
 Usage: sh install.sh [--version vX.Y.Z] [--bin-dir DIR]
 
-Installs sfa-cli from the published GitHub Release archives into a local bin
+Installs sfa from the published GitHub Release archives into a local bin
 directory. The default install location is $HOME/.local/bin when HOME is set,
 otherwise /usr/local/bin.
 
 Options:
   --version VERSION   Install an explicit release such as v1.0.0 (default: latest)
-  --bin-dir DIR       Destination directory for sfa-cli
+  --bin-dir DIR       Destination directory for sfa
   --repo OWNER/REPO   Override the GitHub repository slug used for downloads
   --help              Show this message
 EOF

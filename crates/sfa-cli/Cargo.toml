@@ -6,6 +6,10 @@ license.workspace = true
 rust-version.workspace = true
 description = "CLI for SFA pack/unpack workflows"
 
+[[bin]]
+name = "sfa"
+path = "src/main.rs"
+
 [dependencies]
 clap.workspace = true
 serde.workspace = true

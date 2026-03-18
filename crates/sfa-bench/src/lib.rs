@@ -41,7 +41,13 @@ mod tests {
         let actual: std::collections::BTreeSet<_> = report
             .records
             .iter()
-            .map(|record| (record.workload.clone(), record.baseline, record.phase.clone()))
+            .map(|record| {
+                (
+                    record.workload.clone(),
+                    record.baseline,
+                    record.phase.clone(),
+                )
+            })
             .collect();
 
         assert_eq!(actual, expected);
@@ -59,8 +65,18 @@ mod tests {
                 .iter()
                 .all(|record| record.resource_observation.is_some())
         );
-        assert!(report.records.iter().all(|record| record.files_per_sec.is_some()));
-        assert!(report.records.iter().all(|record| record.mib_per_sec.is_some()));
+        assert!(
+            report
+                .records
+                .iter()
+                .all(|record| record.files_per_sec.is_some())
+        );
+        assert!(
+            report
+                .records
+                .iter()
+                .all(|record| record.mib_per_sec.is_some())
+        );
         assert!(
             report
                 .records

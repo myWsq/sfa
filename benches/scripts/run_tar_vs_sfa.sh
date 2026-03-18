@@ -7,7 +7,7 @@ cd "$ROOT_DIR"
 CARGO_HOME="${CARGO_HOME:-/tmp/cargo-home}"
 MODE="dry-run"
 OUTPUT="benches/results/latest.json"
-SFA_BIN="target/release/sfa-cli"
+SFA_BIN="target/release/sfa"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

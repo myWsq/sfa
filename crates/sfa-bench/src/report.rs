@@ -122,7 +122,12 @@ pub struct BenchmarkRecord {
 }
 
 impl BenchmarkRecord {
-    pub fn from_dry_run(job: &BenchmarkJob, workload: &WorkloadSummary, phase: &str, command: String) -> Self {
+    pub fn from_dry_run(
+        job: &BenchmarkJob,
+        workload: &WorkloadSummary,
+        phase: &str,
+        command: String,
+    ) -> Self {
         Self {
             workload: workload.name.clone(),
             baseline: job.baseline,
@@ -177,8 +182,16 @@ impl BenchmarkRecord {
             mib_per_sec,
             output_size_bytes,
             exit_status: Some(exit_status),
-            stdout: if stdout.is_empty() { None } else { Some(stdout) },
-            stderr: if stderr.is_empty() { None } else { Some(stderr) },
+            stdout: if stdout.is_empty() {
+                None
+            } else {
+                Some(stdout)
+            },
+            stderr: if stderr.is_empty() {
+                None
+            } else {
+                Some(stderr)
+            },
             notes: None,
             sfa_stats,
             resource_observation,

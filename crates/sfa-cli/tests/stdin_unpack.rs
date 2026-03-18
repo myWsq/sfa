@@ -17,7 +17,7 @@ fn unpack_accepts_archive_from_stdin() {
     sfa_unixfs::pack_directory(&src, &archive, &sfa_core::PackConfig::default()).unwrap();
     let archive_bytes = fs::read(&archive).unwrap();
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_sfa-cli"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_sfa"))
         .args(["unpack", "-", "-C"])
         .arg(&out)
         .stdin(Stdio::piped())
@@ -55,7 +55,7 @@ fn unpack_stdin_json_reports_wall_and_phase_breakdowns() {
     sfa_unixfs::pack_directory(&src, &archive, &sfa_core::PackConfig::default()).unwrap();
     let archive_bytes = fs::read(&archive).unwrap();
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_sfa-cli"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_sfa"))
         .args(["unpack", "-", "-C"])
         .arg(&out)
         .args(["--stats-format", "json"])
@@ -107,7 +107,7 @@ fn unpack_stdin_json_reports_wall_and_phase_breakdowns() {
 fn unpack_dry_run_rejects_archive_from_stdin() {
     let temp = TempDir::new().unwrap();
     let out = temp.path().join("out");
-    let output = Command::new(env!("CARGO_BIN_EXE_sfa-cli"))
+    let output = Command::new(env!("CARGO_BIN_EXE_sfa"))
         .args(["unpack", "-", "-C"])
         .arg(&out)
         .arg("--dry-run")
@@ -138,7 +138,7 @@ fn unpack_writes_diagnostics_json_when_requested() {
 
     sfa_unixfs::pack_directory(&src, &archive, &sfa_core::PackConfig::default()).unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_sfa-cli"))
+    let output = Command::new(env!("CARGO_BIN_EXE_sfa"))
         .args(["unpack"])
         .arg(&archive)
         .args(["-C"])

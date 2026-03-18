@@ -6,7 +6,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 fn cli_command() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_sfa-cli"))
+    Command::new(env!("CARGO_BIN_EXE_sfa"))
 }
 
 fn write_sample_source(root: &Path) {

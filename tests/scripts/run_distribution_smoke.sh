@@ -36,11 +36,11 @@ write_asset() {
   local digest
 
   mkdir -p "$package_dir"
-  cat >"$package_dir/sfa-cli" <<EOF
+  cat >"$package_dir/sfa" <<EOF
 #!/usr/bin/env sh
-printf 'sfa-cli %s\n' "${version#v}"
+printf 'sfa %s\n' "${version#v}"
 EOF
-  chmod +x "$package_dir/sfa-cli"
+  chmod +x "$package_dir/sfa"
   printf 'readme\n' >"$package_dir/README.md"
   printf 'license\n' >"$package_dir/LICENSE"
 
@@ -117,8 +117,8 @@ SFA_INSTALL_UNAME_S="Linux" \
 SFA_INSTALL_UNAME_M="x86_64" \
 sh "$ROOT_DIR/install.sh" --version "$RELEASE_TAG" --bin-dir "$INSTALL_BIN_DIR"
 
-installed_version="$("$INSTALL_BIN_DIR/sfa-cli")"
-[[ "$installed_version" == "sfa-cli 9.9.9" ]] || {
+installed_version="$("$INSTALL_BIN_DIR/sfa")"
+[[ "$installed_version" == "sfa 9.9.9" ]] || {
   printf 'unexpected installed version output: %s\n' "$installed_version" >&2
   exit 1
 }
@@ -196,13 +196,13 @@ SFA_INSTALL_BASE_URL="$release_base_url" \
   --release-tag "$RELEASE_TAG" \
   --assets-json "$TMP_DIR/release-assets.json"
 
-FORMULA_PATH="$TMP_DIR/sfa-cli.rb"
+FORMULA_PATH="$TMP_DIR/sfa.rb"
 bash "$ROOT_DIR/scripts/release/generate_homebrew_formula.sh" \
   --release-tag "$RELEASE_TAG" \
   --assets-json "$TMP_DIR/release-assets.json" \
   --output "$FORMULA_PATH"
 
-grep -q 'class SfaCli < Formula' "$FORMULA_PATH" || {
+grep -q 'class Sfa < Formula' "$FORMULA_PATH" || {
   printf 'formula generation did not emit the expected class name\n' >&2
   exit 1
 }

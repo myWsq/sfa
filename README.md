@@ -48,18 +48,20 @@ archives and checksum files. macOS binaries remain unsigned and not notarized.
 ### Homebrew Tap
 
 ```bash
-brew install myWsq/sfa/sfa-cli
-brew upgrade myWsq/sfa/sfa-cli
+brew tap myWsq/sfa
+brew install sfa
+brew upgrade sfa
 ```
 
-Homebrew installs the packaged `sfa-cli` binary from the project-owned tap and
-chooses the matching release archive for the current supported host.
+The short commands above assume the project-owned tap has been added once.
+Homebrew then installs the packaged `sfa` binary from that tap and chooses the
+matching release archive for the current supported host.
 
 ### Install Script
 
 Download and run the public installer script. It resolves the current host,
 downloads the matching archive plus checksum, verifies the archive, and installs
-`sfa-cli` into `"$HOME/.local/bin"` by default.
+`sfa` into `"$HOME/.local/bin"` by default.
 
 ```bash
 curl -fsSLo install-sfa.sh https://raw.githubusercontent.com/myWsq/sfa/main/install.sh
@@ -76,7 +78,7 @@ If your shell does not already include `"$HOME/.local/bin"` on `PATH`:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
-sfa-cli --version
+sfa --version
 ```
 
 ### Direct Release Archives
@@ -91,7 +93,7 @@ shasum -a 256 -c sfa-vX.Y.Z-aarch64-apple-darwin.tar.gz.sha256
 tar -xzf sfa-vX.Y.Z-aarch64-apple-darwin.tar.gz
 ```
 
-Each archive contains the `sfa-cli` binary together with `README.md` and `LICENSE`.
+Each archive contains the `sfa` binary together with `README.md` and `LICENSE`.
 
 ### Build From Source
 
@@ -107,44 +109,46 @@ Requirements:
 cargo build --release -p sfa-cli
 ```
 
-The binary is produced at `target/release/sfa-cli`.
+The binary is produced at `target/release/sfa`.
 
 If you want the Quick Start examples below to work unchanged from the repository
 root, add that directory to your shell `PATH` first:
 
 ```bash
 export PATH="$PWD/target/release:$PATH"
-sfa-cli --version
+sfa --version
 ```
 
 ## Quick Start
 
-The commands below assume `sfa-cli` is already on your `PATH`. If you built from source and did not export `target/release` into `PATH`, replace `sfa-cli` with `./target/release/sfa-cli`.
+The commands below assume `sfa` is already on your `PATH`. If you built from
+source and did not export `target/release` into `PATH`, replace `sfa` with
+`./target/release/sfa`.
 
 Create an archive:
 
 ```bash
-sfa-cli pack ./input ./archive.sfa --integrity strong
+sfa pack ./input ./archive.sfa --integrity strong
 ```
 
-By default, `sfa-cli pack` uses `zstd` data frames at level `-3`.
+By default, `sfa pack` uses `zstd` data frames at level `-3`.
 
 Extract an archive:
 
 ```bash
-sfa-cli unpack ./archive.sfa -C ./restore
+sfa unpack ./archive.sfa -C ./restore
 ```
 
 Extract from standard input:
 
 ```bash
-cat ./archive.sfa | sfa-cli unpack - -C ./restore
+cat ./archive.sfa | sfa unpack - -C ./restore
 ```
 
 Emit machine-readable stats:
 
 ```bash
-sfa-cli pack ./input ./archive.sfa --stats-format json
+sfa pack ./input ./archive.sfa --stats-format json
 ```
 
 ## Benchmark Snapshot
@@ -165,7 +169,7 @@ See [benches/README.md](benches/README.md), [benches/results/README.md](benches/
 
 ## Features
 
-- End-to-end `sfa-cli pack` and `sfa-cli unpack` workflows for Unix-like directory trees
+- End-to-end `sfa pack` and `sfa unpack` workflows for Unix-like directory trees
 - Manifest-first `.sfa` layout with header, manifest, frames, and an optional trailer
 - `lz4` and `zstd` data codec support
 - Support for regular files, directories, symlinks, and hardlinks

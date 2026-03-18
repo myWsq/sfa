@@ -94,7 +94,12 @@ impl BenchmarkWorkload {
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let recipe_dir = recipe_path
             .parent()
-            .ok_or_else(|| format!("benchmark workload recipe has no parent: {}", recipe_path.display()))?
+            .ok_or_else(|| {
+                format!(
+                    "benchmark workload recipe has no parent: {}",
+                    recipe_path.display()
+                )
+            })?
             .to_path_buf();
         let recipe: WorkloadRecipe = serde_json::from_slice(&std::fs::read(recipe_path)?)?;
         let root_templates = load_templates(&recipe.root_templates, &recipe_dir)?;
@@ -125,7 +130,9 @@ impl BenchmarkWorkload {
         &self.recipe.expected_contract
     }
 
-    pub fn planned_summary(&self) -> Result<WorkloadSummary, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn planned_summary(
+        &self,
+    ) -> Result<WorkloadSummary, Box<dyn std::error::Error + Send + Sync>> {
         let root_packages = self.root_package_names();
         let packages = self.build_package_plan();
         let mut directory_tracker = DirectoryTracker::default();
@@ -154,7 +161,8 @@ impl BenchmarkWorkload {
                 let rendered = render_template(&template.contents, &package_context);
                 regular_file_count += 1;
                 total_bytes += rendered.len() as u64;
-                directory_tracker.track_parent_of(&package.relative_dir.join(&template.relative_path));
+                directory_tracker
+                    .track_parent_of(&package.relative_dir.join(&template.relative_path));
             }
         }
 
@@ -165,7 +173,11 @@ impl BenchmarkWorkload {
             regular_file_count,
             directory_count: directory_tracker.len(),
             total_bytes,
-            max_package_depth: packages.iter().map(|package| package.depth).max().unwrap_or(0),
+            max_package_depth: packages
+                .iter()
+                .map(|package| package.depth)
+                .max()
+                .unwrap_or(0),
             dominant_file_types: self.recipe.expected_contract.dominant_file_types.clone(),
         })
     }
@@ -199,7 +211,9 @@ impl BenchmarkWorkload {
             let context = package_context(&package);
             for template in &self.package_templates {
                 let rendered = render_template(&template.contents, &context);
-                let output_path = input_root.join(&package.relative_dir).join(&template.relative_path);
+                let output_path = input_root
+                    .join(&package.relative_dir)
+                    .join(&template.relative_path);
                 write_file(&output_path, &rendered)?;
             }
         }
@@ -218,7 +232,9 @@ impl BenchmarkWorkload {
             return Err("benchmark workload contract must declare nested package depth".into());
         }
         if contract.min_directory_count == 0 {
-            return Err("benchmark workload contract must declare a positive directory-count floor".into());
+            return Err(
+                "benchmark workload contract must declare a positive directory-count floor".into(),
+            );
         }
         if self.recipe.scopes.is_empty() {
             return Err("benchmark workload recipe must declare at least one scope".into());
@@ -382,7 +398,11 @@ fn summarize_generated_tree(
         directory_count,
         total_bytes,
         max_package_depth: workload.recipe.expected_contract.max_package_depth,
-        dominant_file_types: workload.recipe.expected_contract.dominant_file_types.clone(),
+        dominant_file_types: workload
+            .recipe
+            .expected_contract
+            .dominant_file_types
+            .clone(),
     })
 }
 
@@ -390,7 +410,8 @@ fn load_templates(
     specs: &[TemplateSpec],
     recipe_dir: &Path,
 ) -> Result<Vec<LoadedTemplate>, Box<dyn std::error::Error + Send + Sync>> {
-    specs.iter()
+    specs
+        .iter()
         .map(|spec| {
             let template_path = recipe_dir.join(&spec.template);
             Ok(LoadedTemplate {
@@ -431,10 +452,16 @@ fn package_context(package: &PackagePlan) -> Vec<(&'static str, String)> {
     vec![
         ("PACKAGE_NAME", package.name.clone()),
         ("PACKAGE_SAFE_NAME", package.safe_name.clone()),
-        ("PACKAGE_VERSION", format!("1.{}.0", (package.index % 9) + 1)),
+        (
+            "PACKAGE_VERSION",
+            format!("1.{}.0", (package.index % 9) + 1),
+        ),
         ("PACKAGE_DEPTH", package.depth.to_string()),
         ("PACKAGE_INDEX", (package.index + 1).to_string()),
-        ("DEPENDENCY_COUNT", package.dependency_names.len().to_string()),
+        (
+            "DEPENDENCY_COUNT",
+            package.dependency_names.len().to_string(),
+        ),
         ("DEPENDENCY_LIST", dependency_list),
         (
             "DEPENDENCY_NAME_ARRAY",
@@ -467,10 +494,7 @@ fn safe_name(package_name: &str) -> String {
         .replace('.', "-")
 }
 
-fn write_file(
-    path: &Path,
-    contents: &str,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn write_file(path: &Path, contents: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -575,7 +599,10 @@ mod tests {
             summary.recipe_path,
             "benches/workloads/node-modules-100k/recipe.json"
         );
-        assert_eq!(summary.package_count, workload.expected_contract().package_count);
+        assert_eq!(
+            summary.package_count,
+            workload.expected_contract().package_count
+        );
         assert_eq!(
             summary.regular_file_count,
             workload.expected_contract().regular_file_count
@@ -632,8 +659,11 @@ mod tests {
             },
         };
         let recipe_path = asset_dir.path().join("recipe.json");
-        std::fs::write(&recipe_path, serde_json::to_vec_pretty(&recipe).expect("json"))
-            .expect("recipe");
+        std::fs::write(
+            &recipe_path,
+            serde_json::to_vec_pretty(&recipe).expect("json"),
+        )
+        .expect("recipe");
         let workload = BenchmarkWorkload::from_recipe_path(&recipe_path).expect("workload");
         let summary = workload
             .materialize(output_dir.path().join("input").as_path())

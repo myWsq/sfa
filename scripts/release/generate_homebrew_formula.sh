@@ -9,7 +9,7 @@ usage() {
 Usage: bash scripts/release/generate_homebrew_formula.sh \
   --release-tag vX.Y.Z \
   --assets-json /path/to/release-assets.json \
-  --output /path/to/sfa-cli.rb
+  --output /path/to/sfa.rb
 EOF
 }
 
@@ -112,7 +112,7 @@ done <<<"$asset_rows"
 mkdir -p "$(dirname "$output_path")"
 
 cat >"$output_path" <<EOF
-class SfaCli < Formula
+class Sfa < Formula
   desc "Small File Archive CLI for Unix directory trees with many small files"
   homepage "https://github.com/${repo_slug}"
   version "${version}"
@@ -137,12 +137,12 @@ class SfaCli < Formula
   end
 
   def install
-    bin.install "sfa-cli"
+    bin.install "sfa"
     prefix.install "README.md", "LICENSE"
   end
 
   test do
-    assert_match version.to_s, shell_output("#{bin}/sfa-cli --version")
+    assert_match version.to_s, shell_output("#{bin}/sfa --version")
   end
 end
 EOF

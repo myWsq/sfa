@@ -1,6 +1,6 @@
 {
   "generated_at_unix_s": 1773770109,
-  "invocation": "target/debug/tar_vs_sfa --sfa-bin target/release/sfa-cli --output /tmp/default-node-modules-benchmark-baseline-v2.json",
+  "invocation": "target/debug/tar_vs_sfa --sfa-bin target/release/sfa --output /tmp/default-node-modules-benchmark-baseline-v2.json",
   "dry_run": false,
   "environment": {
     "host_os": "macos",
@@ -12,7 +12,7 @@
     },
     "sfa": {
       "name": "sfa",
-      "path": "target/release/sfa-cli",
+      "path": "target/release/sfa",
       "version": "sfa 1.0.0"
     },
     "zstd": {
@@ -47,7 +47,7 @@
       "workload": "node-modules-100k",
       "baseline": "sfa",
       "phase": "pack",
-      "command": "target/release/sfa-cli pack /var/folders/wk/t7g58g0x1f38kftbvln_2nxr0000gn/T/.tmp66LSMM/input /var/folders/wk/t7g58g0x1f38kftbvln_2nxr0000gn/T/.tmp66LSMM/artifacts/node-modules-100k.sfa --stats-format json",
+      "command": "target/release/sfa pack /var/folders/wk/t7g58g0x1f38kftbvln_2nxr0000gn/T/.tmp66LSMM/input /var/folders/wk/t7g58g0x1f38kftbvln_2nxr0000gn/T/.tmp66LSMM/artifacts/node-modules-100k.sfa --stats-format json",
       "elapsed_ms": 9774,
       "files_per_sec": 10804.276652342951,
       "mib_per_sec": 5.2381376559587505,
@@ -97,7 +97,7 @@
       "workload": "node-modules-100k",
       "baseline": "sfa",
       "phase": "unpack",
-      "command": "target/release/sfa-cli unpack /var/folders/wk/t7g58g0x1f38kftbvln_2nxr0000gn/T/.tmp66LSMM/artifacts/node-modules-100k.sfa -C /var/folders/wk/t7g58g0x1f38kftbvln_2nxr0000gn/T/.tmp66LSMM/unpack-node-modules-100k-sfa --stats-format json",
+      "command": "target/release/sfa unpack /var/folders/wk/t7g58g0x1f38kftbvln_2nxr0000gn/T/.tmp66LSMM/artifacts/node-modules-100k.sfa -C /var/folders/wk/t7g58g0x1f38kftbvln_2nxr0000gn/T/.tmp66LSMM/unpack-node-modules-100k-sfa --stats-format json",
       "elapsed_ms": 15255,
       "files_per_sec": 6922.386102917076,
       "mib_per_sec": 3.3561165158532167,

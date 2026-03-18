@@ -82,8 +82,8 @@ updated:
 ```bash
 gh release view v1.0.0 --json assets > /tmp/release-assets.json
 bash scripts/release/validate_distribution_assets.sh --release-tag v1.0.0 --assets-json /tmp/release-assets.json
-bash scripts/release/generate_homebrew_formula.sh --release-tag v1.0.0 --assets-json /tmp/release-assets.json --output /tmp/sfa-cli.rb
-HOMEBREW_TAP_GITHUB_TOKEN=... bash scripts/release/publish_homebrew_formula.sh --formula /tmp/sfa-cli.rb --release-tag v1.0.0
+bash scripts/release/generate_homebrew_formula.sh --release-tag v1.0.0 --assets-json /tmp/release-assets.json --output /tmp/sfa.rb
+HOMEBREW_TAP_GITHUB_TOKEN=... bash scripts/release/publish_homebrew_formula.sh --formula /tmp/sfa.rb --release-tag v1.0.0
 ```
 
 ## Standard Release Procedure
@@ -146,7 +146,7 @@ If the release changes benchmark logic, the default workload recipe, the default
 CARGO_HOME=/tmp/cargo-home cargo build --release -p sfa-cli
 ./benches/scripts/run_tar_vs_sfa.sh \
   --execute \
-  --sfa-bin target/release/sfa-cli \
+  --sfa-bin target/release/sfa \
   --output benches/results/baseline-v0.1.0.json
 ```
 
@@ -215,7 +215,7 @@ After `vX.Y.Z` is pushed, the release workflow will:
 - Build CLI archives for Linux `x86_64`, macOS `x86_64`, and macOS `arm64`
 - Create or update the GitHub Release and attach the generated archives and checksum files
 - Gather the published release asset metadata and validate that the installer-facing URLs and checksum files resolve those exact uploaded assets
-- Generate `Formula/sfa-cli.rb` for the matching release version
+- Generate `Formula/sfa.rb` for the matching release version
 - Push the updated formula to the project-owned Homebrew tap using the dedicated tap credential
 
 If the release workflow is not yet available, or if a Release must be backfilled for an existing tag, manually trigger `.github/workflows/release.yml` with `workflow_dispatch` and pass the tag name.
@@ -235,7 +235,7 @@ The workflow also validates and publishes managed distribution metadata:
 
 - `install.sh` URL resolution must match the exact uploaded archive and checksum asset names for the release tag
 - The Homebrew formula must use the GitHub Release asset URLs and SHA-256 digests reported for those uploaded archives
-- The tap repository must receive the updated `Formula/sfa-cli.rb` revision for the released version
+- The tap repository must receive the updated `Formula/sfa.rb` revision for the released version
 
 If the workflow cannot be used, fall back to:
 
@@ -248,7 +248,7 @@ it does not already exist. The default tap slug is `${owner}/homebrew-sfa`, so
 for the canonical repository owner the first-time bootstrap is:
 
 ```bash
-gh repo create myWsq/homebrew-sfa --public --description "Homebrew tap for sfa-cli"
+gh repo create myWsq/homebrew-sfa --public --description "Homebrew tap for sfa"
 ```
 
 Once the repository exists, the publish helper can seed or repair it for any
@@ -257,8 +257,8 @@ existing tag:
 ```bash
 gh release view vX.Y.Z --json assets > /tmp/release-assets.json
 bash scripts/release/validate_distribution_assets.sh --release-tag vX.Y.Z --assets-json /tmp/release-assets.json
-bash scripts/release/generate_homebrew_formula.sh --release-tag vX.Y.Z --assets-json /tmp/release-assets.json --output /tmp/sfa-cli.rb
-HOMEBREW_TAP_GITHUB_TOKEN=... HOMEBREW_TAP_REPOSITORY=myWsq/homebrew-sfa bash scripts/release/publish_homebrew_formula.sh --formula /tmp/sfa-cli.rb --release-tag vX.Y.Z
+bash scripts/release/generate_homebrew_formula.sh --release-tag vX.Y.Z --assets-json /tmp/release-assets.json --output /tmp/sfa.rb
+HOMEBREW_TAP_GITHUB_TOKEN=... HOMEBREW_TAP_REPOSITORY=myWsq/homebrew-sfa bash scripts/release/publish_homebrew_formula.sh --formula /tmp/sfa.rb --release-tag vX.Y.Z
 ```
 
 The public release should make clear:
@@ -274,7 +274,7 @@ The public release should make clear:
 After the release is published, check:
 
 - `gh release view vX.Y.Z` shows the expected archive and checksum assets
-- `brew install myWsq/sfa/sfa-cli` succeeds on a supported host or clean CI runner
+- `brew tap myWsq/sfa && brew install sfa` succeeds on a supported host or clean CI runner
 - `sh install.sh --version vX.Y.Z --bin-dir "$(mktemp -d)"` succeeds on a supported host
 - Whether [ROADMAP.md](ROADMAP.md) and [README.md](README.md) need status updates
 - Whether [CHANGELOG.md](CHANGELOG.md) should reopen the next `Unreleased` section

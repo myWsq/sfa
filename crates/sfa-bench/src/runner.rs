@@ -168,14 +168,17 @@ fn materialize_workload(
     workload: &BenchmarkWorkload,
     planned_workload: &WorkloadSummary,
     dry_run: bool,
-) -> Result<(Option<TempDir>, BenchmarkPaths, WorkloadSummary), Box<dyn std::error::Error + Send + Sync>>
-{
+) -> Result<
+    (Option<TempDir>, BenchmarkPaths, WorkloadSummary),
+    Box<dyn std::error::Error + Send + Sync>,
+> {
     if dry_run {
         let paths = dry_run_paths(workload);
         return Ok((None, paths, planned_workload.clone()));
     }
 
-    let workspace = tempfile::tempdir().map_err(|e| format!("failed to create temp workspace: {e}"))?;
+    let workspace =
+        tempfile::tempdir().map_err(|e| format!("failed to create temp workspace: {e}"))?;
     let paths = BenchmarkPaths {
         workload_name: workload.name().to_string(),
         input_dir: workspace.path().join("input"),
@@ -256,7 +259,9 @@ fn run_record(
     }
 
     let output_size_bytes = match phase {
-        "pack" => std::fs::metadata(archive_path(job, paths)).ok().map(|metadata| metadata.len()),
+        "pack" => std::fs::metadata(archive_path(job, paths))
+            .ok()
+            .map(|metadata| metadata.len()),
         "unpack" => Some(total_file_bytes(&unpack_dir(job, paths))?),
         other => return Err(format!("unsupported benchmark phase: {other}").into()),
     };
@@ -360,15 +365,27 @@ fn prepare_tools(
             resolved_sfa_bin: sfa_bin,
             tar_bin,
             zstd_bin,
-            environment: build_environment(resolved_sfa_bin, tar, zstd, resource_sampler.metadata()),
+            environment: build_environment(
+                resolved_sfa_bin,
+                tar,
+                zstd,
+                resource_sampler.metadata(),
+            ),
             resource_sampler,
         })
     } else {
         Ok(PreparedTools {
-            resolved_sfa_bin: resolved_sfa_bin.clone().unwrap_or_else(|| cfg.sfa_bin.clone()),
+            resolved_sfa_bin: resolved_sfa_bin
+                .clone()
+                .unwrap_or_else(|| cfg.sfa_bin.clone()),
             tar_bin: tar.clone().unwrap_or_else(|| PathBuf::from("tar")),
             zstd_bin: zstd.clone().unwrap_or_else(|| PathBuf::from("zstd")),
-            environment: build_environment(resolved_sfa_bin, tar, zstd, resource_sampler.metadata()),
+            environment: build_environment(
+                resolved_sfa_bin,
+                tar,
+                zstd,
+                resource_sampler.metadata(),
+            ),
             resource_sampler,
         })
     }
@@ -473,9 +490,7 @@ fn resolve_sfa_bin(requested: &Path) -> Option<PathBuf> {
 
     [
         PathBuf::from("target/release/sfa"),
-        PathBuf::from("target/release/sfa-cli"),
         PathBuf::from("target/debug/sfa"),
-        PathBuf::from("target/debug/sfa-cli"),
     ]
     .into_iter()
     .find(|candidate| candidate.exists())
@@ -484,7 +499,6 @@ fn resolve_sfa_bin(requested: &Path) -> Option<PathBuf> {
             .ok()
             .flatten()
     })
-    .or_else(|| resolve_optional_command("sfa-cli").ok().flatten())
 }
 
 fn resolve_optional_command(
@@ -521,7 +535,7 @@ fn resolve_optional_command(
 
 fn missing_sfa_bin_message(requested: &Path) -> String {
     format!(
-        "could not find the SFA CLI binary for benchmark execution. Checked `{}` and the local build outputs `target/release/sfa`, `target/release/sfa-cli`, `target/debug/sfa`, and `target/debug/sfa-cli`. Build it first with `cargo build --release -p sfa-cli` or pass `--sfa-bin <path>`.",
+        "could not find the SFA binary for benchmark execution. Checked `{}` and the local build outputs `target/release/sfa` and `target/debug/sfa`. Build it first with `cargo build --release -p sfa-cli` or pass `--sfa-bin <path>`.",
         requested.display()
     )
 }
