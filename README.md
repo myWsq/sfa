@@ -2,37 +2,16 @@
 
 Small-file archives that leave `tar` behind.
 
-```text
-+--------------------------------+    +--------------------------------+
-| tar | zstd --fast=3            |    | SFA                            |
-| long file-by-file stream       |    | manifest + bundles + frames    |
-|                                |    |                                |
-| many tiny files                |    | many tiny files                |
-| [f][f][f][f][f][f]             |    | [f][f][f][f][f][f]            |
-|             |                  |    |             |                  |
-|             v                  |    |         scan once              |
-|      one long stream           |    |             |                  |
-|             |                  |    |  manifest + bundle plan        |
-|             v                  |    |             |                  |
-| restore plan emerges late      |    | [bundle A] [bundle B] [bundle C]
-|             |                  |    |             |                  |
-|           unpack               |    |       ordered frames           |
-|                                |    |             |                  |
-|                                |    |     sequential unpack          |
-+--------------------------------+    +--------------------------------+
-```
-
 On the committed macOS `aarch64` `node-modules-100k` baseline, SFA packs about `34.9x` faster than `tar`, unpacks about `15.9x` faster, and produces an archive about `2.2x` smaller than `tar | zstd --fast=3`.
 
 SFA is a CLI and archive format for Unix directory trees with many small files.
 
 ## Why SFA
 
-- Much faster than `tar` on Unix trees dominated by small files
-- Built for `node_modules`, dependency caches, vendored source trees, and generated outputs
-- Turns many small files into bundle-sized work units
-- Unpacks with strict sequential reads and supports `stdin` input
-- Supports machine-readable stats, integrity validation, and safe restore behavior
+- `Fast`: Much faster than `tar` on Unix trees dominated by small files
+- `Smaller`: Produces smaller archives on `node_modules`-style workloads
+- `Streaming`: Sequential archive reads, ordered frames, and unpack from `stdin` or HTTP streams
+- `Safe`: Integrity validation, explicit restore policies, and `dirfd` / `openat`-style restore behavior
 
 ## Install
 
@@ -52,14 +31,13 @@ brew install sfa
 ### Install script
 
 ```bash
-curl -fsSLo install-sfa.sh https://raw.githubusercontent.com/myWsq/sfa/main/install.sh
-sh install-sfa.sh
+curl -fsSL https://raw.githubusercontent.com/myWsq/sfa/main/install.sh | sh
 ```
 
 Install a specific release or choose a different destination directory:
 
 ```bash
-sh install-sfa.sh --version v1.0.0 --bin-dir "$HOME/.local/bin"
+curl -fsSL https://raw.githubusercontent.com/myWsq/sfa/main/install.sh | sh -s -- --version v1.0.0 --bin-dir "$HOME/.local/bin"
 ```
 
 If your shell does not already include `"$HOME/.local/bin"` on `PATH`:
@@ -87,7 +65,7 @@ sfa --version
 Create an archive:
 
 ```bash
-sfa pack ./input ./archive.sfa --integrity strong
+sfa pack ./input ./archive.sfa
 ```
 
 Extract an archive:
@@ -96,10 +74,10 @@ Extract an archive:
 sfa unpack ./archive.sfa -C ./restore
 ```
 
-Extract from standard input:
+Extract from HTTP while streaming to `stdin`:
 
 ```bash
-cat ./archive.sfa | sfa unpack - -C ./restore
+curl -fsSL https://example.com/archive.sfa | sfa unpack - -C ./restore
 ```
 
 Emit machine-readable stats:
@@ -107,25 +85,6 @@ Emit machine-readable stats:
 ```bash
 sfa pack ./input ./archive.sfa --stats-format json
 ```
-
-## Best For
-
-Use SFA when you need:
-
-- Fast local archive and restore workflows for Unix directory trees with many small files
-- Deterministic scanning and stable bundle planning
-- Sequential archive reads without seek-dependent unpack logic
-- Benchmarkable comparisons against `tar | zstd --fast=3`
-- Explicit integrity and restore-policy controls
-
-SFA is not yet the right fit when you need:
-
-- Full Unix extended metadata coverage such as xattrs, ACLs, or device file restore
-- Full `tar` format compatibility
-- Fully equivalent behavior on non-Unix platforms
-- Signed or notarized macOS binaries
-
-SFA is not a drop-in replacement for `tar`. It is optimized for reliable local pack/unpack workflows where small-file throughput, ordered restore, and safety matter more than `tar` byte compatibility.
 
 ## Benchmark Snapshot
 
@@ -145,6 +104,26 @@ See [benches/README.md](benches/README.md), [benches/results/README.md](benches/
 
 SFA keeps the user path simple with two commands, `pack` and `unpack`, but the format is built around a different execution model than `tar`:
 
+```text
++--------------------------------+    +--------------------------------+
+| tar | zstd --fast=3            |    | SFA                            |
+| long file-by-file stream       |    | manifest + bundles + frames    |
+|                                |    |                                |
+| many tiny files                |    | many tiny files                |
+| [f][f][f][f][f][f]             |    | [f][f][f][f][f][f]            |
+|             |                  |    |             |                  |
+|             v                  |    |         scan once              |
+|      one long stream           |    |             |                  |
+|             |                  |    |  manifest + bundle plan        |
+|             v                  |    |             |                  |
+| restore plan emerges late      |    | [bundle A] [bundle B] [bundle C]
+|             |                  |    |             |                  |
+|           unpack               |    |       ordered frames           |
+|                                |    |             |                  |
+|                                |    |     sequential unpack          |
++--------------------------------+    +--------------------------------+
+```
+
 - Scan once and build a manifest plus bundle plan
 - Write archive records in order: header, manifest, frames, optional trailer
 - Decode and restore sequentially without seek-dependent archive traversal
@@ -152,17 +131,19 @@ SFA keeps the user path simple with two commands, `pack` and `unpack`, but the f
 
 This is the main design trade: SFA keeps Unix tree semantics, but uses a bundle-oriented internal structure instead of `tar`'s file-by-file layout.
 
+SFA is not a drop-in replacement for `tar`. It is optimized for reliable local pack/unpack workflows where small-file throughput, ordered restore, and safety matter more than `tar` byte compatibility.
+
 ## Status
 
-SFA is preparing its first stable `v1.0.0` release.
+SFA `v1.0.0` is released.
 
-- `format-v1` is frozen and is the current compatibility boundary
-- Milestones M0 through M3 for the stable-v1 scope are complete
+- `format-v1` is frozen and remains the current compatibility boundary
+- The first stable release covers the M0 through M3 stable-v1 scope
 - xattrs, ACLs, special-file restore, and broader Unix extensions remain deferred to post-v1 work
 
 ## Documentation
 
-- [ROADMAP.md](ROADMAP.md): release status and short-term priorities
+- [ROADMAP.md](ROADMAP.md): roadmap and short-term priorities
 - [spec/README.md](spec/README.md): protocol and verification entry point
 - [RELEASING.md](RELEASING.md): release checklist and GitHub release process
 - [CHANGELOG.md](CHANGELOG.md): repository change history

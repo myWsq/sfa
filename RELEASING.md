@@ -48,29 +48,26 @@ Do not start the release process until all of the following are true:
    - `HOMEBREW_TAP_GITHUB_TOKEN` is present as a repository secret with write access to the tap repository
    - `HOMEBREW_TAP_REPOSITORY` is set as a repository variable if the tap repo is not the default `${owner}/homebrew-sfa`
 
-## Current Stable Release Train
+## Current Stable Release
 
-The current repository release train is preparing the first stable `v1.0.0` release.
+The current repository stable release is `v1.0.0`.
 
 - Release class: `major`
-- Candidate revision: the current `main` branch after `v0.3.0`
+- Release tag: `v1.0.0`
+- Published from the `main` branch after `v0.3.0`
 - Included post-`v0.3.0` change: unpack directory setup now does more bounded preparation before the worker pipeline begins
-- Extra release-prep requirement: refresh `benches/results/baseline-v0.1.0.json` for the default `node_modules-100k` benchmark path and validate it with `cargo test -p sfa-bench`
 - Managed distribution path for `v1.0.0`: Homebrew tap plus the public `install.sh` installer, both derived from the GitHub Release archives
 - Deferred from `v1.0.0`: xattrs, ACLs, special-file restore, broader Unix extensions, non-Unix parity, crates.io distribution, and notarization work
 
-Exact handoff commands for the current stable release train:
+Useful inspection or repair commands for the released `v1.0.0` line:
 
 ```bash
 git status --short
-git push origin main
-git tag -a v1.0.0 -m "sfa v1.0.0"
-git push origin v1.0.0
-gh workflow run release.yml -f tag=v1.0.0
 gh release view v1.0.0
+gh workflow run release.yml -f tag=v1.0.0
 ```
 
-Manual fallback if the workflow cannot publish the release:
+Manual fallback if the GitHub Release must be repaired or backfilled for the existing tag:
 
 ```bash
 gh release create v1.0.0 --verify-tag --title "sfa v1.0.0" --notes-file release-notes/v1.0.0.md
@@ -154,7 +151,7 @@ After refreshing the baseline, confirm that `benches/results/baseline-v0.1.0.jso
 
 If the release does not change benchmark behavior, workload recipe, command profile, or result schema, the benchmark dry run remains mandatory but a fresh committed baseline is not required.
 
-For the current `v1.0.0` release train, a committed baseline refresh is required because the selected candidate revision includes benchmark-affecting unpack setup changes and the benchmark contract has been realigned around the default `node_modules-100k` workload.
+For the released `v1.0.0` revision, a committed baseline refresh was required because that release includes benchmark-affecting unpack setup changes and the benchmark contract was realigned around the default `node_modules-100k` workload.
 
 If benchmark evidence is part of the release claim, also confirm that the committed baseline includes:
 

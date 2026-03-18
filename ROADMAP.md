@@ -2,11 +2,11 @@
 
 This document describes the current development stages, project status, and near-term priorities for SFA v1. Unless explicitly stated otherwise, it does not represent a release-date commitment.
 
-Last updated: 2026-03-17
+Last updated: 2026-03-18
 
 ## Current Status
 
-SFA v1 is in stable-release preparation. The repository already contains a runnable minimal usable chain, a frozen protocol definition, completed M0 through M3 milestones for the current stable-v1 scope, and a candidate `main` revision that extends the `v0.3.0` line with additional unpack setup optimization work.
+SFA `v1.0.0` is released. The repository now tracks the stable v1 line with a frozen protocol definition, completed M0 through M3 milestones for the stable-v1 scope, and post-v1 follow-up planning that begins with M4.
 
 The repository currently provides:
 
@@ -26,11 +26,11 @@ The repository currently provides:
 - A restore path built around `dirfd` / `openat`-style safe I/O and `.sfa-untrusted` emission on `strong` trailer verification failure
 - Expanded canonical golden fixtures and CLI regression coverage as repository-default verification baselines
 
-The current release train is focused on:
+The current post-v1 focus is:
 
-- Preparing the first stable `v1.0.0` release from the current `main` revision
-- Refreshing the committed benchmark baseline and re-running the authoritative release checklist because the candidate includes benchmark-affecting unpack setup changes beyond `v0.3.0`
-- Keeping xattrs, ACLs, special files, and broader Unix extensions explicitly deferred to post-v1 work
+- Keeping the released `v1.0.0` line stable as follow-up work lands on `main`
+- Turning xattrs, ACLs, special files, and broader Unix extensions into explicit post-v1 work instead of expanding the frozen v1 contract
+- Keeping benchmark baselines, release guidance, and roadmap state aligned with shipped behavior
 
 ## v1 Goals
 
@@ -48,7 +48,7 @@ The current version does not attempt to cover all Unix extended semantics in one
 | Milestone | Name | Status | Goal |
 |---|---|---|---|
 | M0 | Protocol freeze | Complete | Freeze the v1 protocol text, commit the first golden fixtures, and record the review outcome |
-| M1 | Minimal usable chain | Complete | Close the MVP into a stable, regression-friendly, CI-ready minimal release candidate |
+| M1 | Minimal usable chain | Complete | Close the MVP into a stable, regression-friendly, CI-ready usable chain |
 | M2 | Performance mainline | Complete | Establish real benchmark datasets and `tar + same codec` baselines with phase-level and resource-level observations |
 | M3 | Unix semantics hardening | Complete | Stabilize the current metadata contract for the stable v1 boundary and move broader Unix extensions into post-v1 follow-up |
 | M4 | Post-v1 Unix extensions | Not started | Evaluate xattrs, ACLs, special files, and other broader Unix extensions without changing the frozen v1 contract |
@@ -145,7 +145,7 @@ Closure criteria:
 Closure result:
 
 - The stable v1 metadata boundary is explicit for `mode`, `mtime`, and owner-policy behavior
-- Repository-facing status documents can now treat first-stable-release preparation as the next step instead of continuing to describe M3 as open-ended
+- Repository-facing status documents can now treat the first stable release as complete and move follow-up planning into post-v1 work
 - xattrs, ACLs, special files, and broader Unix extensions remain deferred to post-v1 work
 
 ### M4: Post-v1 Unix Extensions
@@ -163,33 +163,28 @@ Closure criteria:
 - Any expanded Unix metadata or special-file surface has dedicated specs, verification assets, and release notes
 - Post-v1 extensions do not redefine the frozen `format-v1` compatibility contract for the first stable release line
 
-## Stable Release Train
+## Latest Stable Release
 
-Current target: `v1.0.0`
+Current stable release: `v1.0.0`
 
-Selected candidate revision:
+Released revision notes:
 
-- The current `main` branch after `v0.3.0`
-- Includes the post-`v0.3.0` unpack directory setup optimization work before the worker pipeline begins
-
-Current release-train blockers:
-
-- Restore release-gate compliance on the selected candidate revision
-- Refresh and validate the committed benchmark baseline because the selected candidate changes benchmark-facing unpack behavior
-- Synchronize version metadata, roadmap state, changelog, release notes, and release guidance around the same `v1.0.0` target
+- The release tag `v1.0.0` is the first stable SFA v1 release in this repository
+- It was published from the `main` branch after `v0.3.0`
+- It includes the post-`v0.3.0` unpack directory setup optimization work before the worker pipeline begins
+- xattrs, ACLs, special files, and broader Unix extensions remain explicitly deferred to post-v1 work
 
 ## Near-Term Priorities
 
 The current recommended next work item is:
 
-`v1.0.0: prepare the current main revision as the first stable release candidate`
+`post-v1: define and begin the M4 Unix extensions follow-up`
 
 Suggested scope:
 
-- Keep xattrs, ACLs, special files, and broader Unix extensions deferred instead of treating them as stable-release blockers
-- Re-run the authoritative release checklist on the selected candidate revision
-- Refresh `benches/results/baseline-v0.1.0.json` because the candidate includes benchmark-affecting unpack setup changes beyond `v0.3.0`
-- Prepare `v1.0.0` version metadata, changelog, and in-repo release notes for tagging
+- Keep xattrs, ACLs, special files, and broader Unix extensions in dedicated post-v1 changes instead of expanding the frozen v1 contract ad hoc
+- Use M4 planning to decide how metadata extensions, special-file support, and later restore-path or benchmark automation work should be split
+- Keep benchmark baselines, changelog entries, and release guidance aligned as post-v1 work starts landing
 
 ## Document Boundaries
 

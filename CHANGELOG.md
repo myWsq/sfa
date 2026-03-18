@@ -1,6 +1,6 @@
 # Changelog
 
-This file records repository-level changes for SFA. The repository is preparing its first stable SFA v1 release, with `format-v1` frozen and any compatibility-sensitive follow-up managed through OpenSpec changes.
+This file records repository-level changes for SFA. The repository has released its first stable SFA v1 line, with `format-v1` frozen and any compatibility-sensitive follow-up managed through OpenSpec changes.
 
 ## [Unreleased]
 
@@ -8,18 +8,18 @@ This file records repository-level changes for SFA. The repository is preparing 
 
 ### Added
 
-- Add the first stable `v1.0.0` release notes draft and extend repository release-readiness requirements to cover M3 closeout and first-stable-release preparation
+- Add the first stable `v1.0.0` release notes and extend repository release-readiness requirements to cover M3 closeout and stable-release publication
 
 ### Changed
 
-- Promote the current frozen `format-v1` surface to the first stable release target `1.0.0`
+- Promote the current frozen `format-v1` surface to the first stable release `1.0.0`
 - Close the current M3 Unix metadata hardening slice in roadmap, README, and technical-solution docs while deferring xattrs, ACLs, special-file restore, and broader Unix extensions to post-v1 work
-- Parallelize unpack directory setup before worker execution on the selected stable-release candidate revision
-- Update release guidance so the selected `v1.0.0` candidate includes the post-`v0.3.0` unpack setup optimization and requires a refreshed committed benchmark baseline
+- Parallelize unpack directory setup before worker execution on the shipped `v1.0.0` revision
+- Update release guidance so the released `v1.0.0` line includes the post-`v0.3.0` unpack setup optimization and a refreshed committed benchmark baseline
 
 ### Fixed
 
-- Restore repository formatting compliance so the authoritative release checklist is green on the `v1.0.0` candidate revision
+- Restore repository formatting compliance so the authoritative release checklist is green on the released `v1.0.0` revision
 
 ## [0.3.0] - 2026-03-17
 
