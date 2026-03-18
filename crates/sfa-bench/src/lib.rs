@@ -1,63 +1,57 @@
 pub mod harness;
 pub mod report;
 pub mod runner;
+pub mod workload;
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
     use std::path::PathBuf;
 
-    use crate::harness::{Codec, default_cases, default_matrix};
+    use crate::harness::{Baseline, default_jobs};
     use crate::report::{BenchmarkSuiteReport, SfaCommandStats};
 
     #[test]
-    fn matrix_contains_tar_and_sfa_for_each_dataset() {
-        let cases = default_cases();
-        let matrix = default_matrix();
-        assert_eq!(matrix.len(), cases.len() * 2 * 2);
-        assert!(matrix.iter().any(|job| job.codec == Codec::Lz4));
-        assert!(matrix.iter().any(|job| job.codec == Codec::Zstd));
+    fn default_jobs_include_sfa_and_tar() {
+        let jobs = default_jobs();
+        assert_eq!(jobs.len(), 2);
+        assert!(jobs.iter().any(|job| job.baseline == Baseline::Sfa));
+        assert!(jobs.iter().any(|job| job.baseline == Baseline::Tar));
     }
 
     #[test]
-    fn committed_baseline_report_matches_current_matrix() {
+    fn committed_baseline_report_matches_current_default_jobs() {
         let report_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../../benches/results/baseline-v0.1.0.json");
         let report: BenchmarkSuiteReport = serde_json::from_slice(
             &std::fs::read(&report_path).expect("committed benchmark baseline should exist"),
         )
         .expect("committed benchmark baseline should parse");
+        let workload_name = report.workload.name.clone();
 
-        let expected: BTreeSet<_> = default_matrix()
+        let expected: std::collections::BTreeSet<_> = default_jobs()
             .into_iter()
             .flat_map(|job| {
-                ["pack", "unpack"].into_iter().map(move |phase| {
-                    (
-                        job.case.name.clone(),
-                        job.baseline,
-                        job.codec,
-                        phase.to_string(),
-                    )
-                })
+                let workload_name = workload_name.clone();
+                ["pack", "unpack"]
+                    .into_iter()
+                    .map(move |phase| (workload_name.clone(), job.baseline, phase.to_string()))
             })
             .collect();
 
-        let actual: BTreeSet<_> = report
+        let actual: std::collections::BTreeSet<_> = report
             .records
             .iter()
-            .map(|record| {
-                (
-                    record.dataset.clone(),
-                    record.baseline,
-                    record.codec,
-                    record.phase.clone(),
-                )
-            })
+            .map(|record| (record.workload.clone(), record.baseline, record.phase.clone()))
             .collect();
 
         assert_eq!(actual, expected);
         assert!(report.environment.tar.path.is_some());
-        assert_eq!(report.datasets.len(), default_cases().len());
+        assert_eq!(report.workload.name, "node-modules-100k");
+        assert_eq!(
+            report.workload.recipe_path,
+            "benches/workloads/node-modules-100k/recipe.json"
+        );
+        assert!(report.workload.regular_file_count >= 100_000);
         assert!(report.environment.resource_sampler.supported);
         assert!(
             report
@@ -65,12 +59,20 @@ mod tests {
                 .iter()
                 .all(|record| record.resource_observation.is_some())
         );
+        assert!(report.records.iter().all(|record| record.files_per_sec.is_some()));
+        assert!(report.records.iter().all(|record| record.mib_per_sec.is_some()));
+        assert!(
+            report
+                .records
+                .iter()
+                .all(|record| record.output_size_bytes.is_some())
+        );
         assert!(report.records.iter().all(|record| match record.baseline {
-            crate::harness::Baseline::Sfa => matches!(
+            Baseline::Sfa => matches!(
                 record.sfa_stats,
                 Some(SfaCommandStats::Pack(_)) | Some(SfaCommandStats::Unpack(_))
             ),
-            crate::harness::Baseline::Tar => record.sfa_stats.is_none(),
+            Baseline::Tar => record.sfa_stats.is_none(),
         }));
         assert!(report.records.iter().all(|record| match &record.sfa_stats {
             Some(SfaCommandStats::Unpack(stats)) => {

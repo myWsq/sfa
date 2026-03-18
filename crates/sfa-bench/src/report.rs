@@ -1,15 +1,16 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::harness::{Baseline, BenchmarkJob, Codec};
+use crate::harness::{Baseline, BenchmarkJob};
+use crate::workload::WorkloadSummary;
 use sfa_core::{PackStats, UnpackStats};
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BenchmarkSuiteReport {
     pub generated_at_unix_s: u64,
     pub invocation: String,
     pub dry_run: bool,
     pub environment: BenchmarkEnvironment,
-    pub datasets: Vec<DatasetSummary>,
+    pub workload: WorkloadSummary,
     pub records: Vec<BenchmarkRecord>,
 }
 
@@ -18,14 +19,14 @@ impl BenchmarkSuiteReport {
         invocation: String,
         dry_run: bool,
         environment: BenchmarkEnvironment,
-        datasets: Vec<DatasetSummary>,
+        workload: WorkloadSummary,
     ) -> Self {
         Self {
             generated_at_unix_s: 0,
             invocation,
             dry_run,
             environment,
-            datasets,
+            workload,
             records: Vec::new(),
         }
     }
@@ -33,7 +34,7 @@ impl BenchmarkSuiteReport {
     pub fn stamp(mut self) -> Self {
         self.generated_at_unix_s = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
+            .map(|duration| duration.as_secs())
             .unwrap_or(0);
         self
     }
@@ -45,7 +46,7 @@ pub struct BenchmarkEnvironment {
     pub host_arch: String,
     pub tar: ToolMetadata,
     pub sfa: ToolMetadata,
-    pub codecs: Vec<CodecToolMetadata>,
+    pub zstd: ToolMetadata,
     #[serde(default)]
     pub resource_sampler: ResourceSamplerMetadata,
 }
@@ -55,22 +56,6 @@ pub struct ToolMetadata {
     pub name: String,
     pub path: Option<String>,
     pub version: Option<String>,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct CodecToolMetadata {
-    pub codec: Codec,
-    pub tool: ToolMetadata,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct DatasetSummary {
-    pub dataset: String,
-    pub input_dir: String,
-    pub file_count: u64,
-    pub directory_count: u64,
-    pub symlink_count: u64,
-    pub total_bytes: u64,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
@@ -115,12 +100,17 @@ impl ResourceObservation {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BenchmarkRecord {
-    pub dataset: String,
+    pub workload: String,
     pub baseline: Baseline,
-    pub codec: Codec,
     pub phase: String,
     pub command: String,
     pub elapsed_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub files_per_sec: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mib_per_sec: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_size_bytes: Option<u64>,
     pub exit_status: Option<i32>,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
@@ -132,14 +122,16 @@ pub struct BenchmarkRecord {
 }
 
 impl BenchmarkRecord {
-    pub fn from_dry_run(job: &BenchmarkJob, phase: &str, command: String) -> Self {
+    pub fn from_dry_run(job: &BenchmarkJob, workload: &WorkloadSummary, phase: &str, command: String) -> Self {
         Self {
-            dataset: job.case.name.clone(),
+            workload: workload.name.clone(),
             baseline: job.baseline,
-            codec: job.codec,
             phase: phase.to_string(),
             command,
             elapsed_ms: None,
+            files_per_sec: None,
+            mib_per_sec: None,
+            output_size_bytes: None,
             exit_status: None,
             stdout: None,
             stderr: None,
@@ -152,33 +144,41 @@ impl BenchmarkRecord {
     #[allow(clippy::too_many_arguments)]
     pub fn from_execution(
         job: &BenchmarkJob,
+        workload: &WorkloadSummary,
         phase: &str,
         command: String,
         elapsed_ms: u64,
+        output_size_bytes: Option<u64>,
         exit_status: i32,
         stdout: String,
         stderr: String,
         sfa_stats: Option<SfaCommandStats>,
         resource_observation: Option<ResourceObservation>,
     ) -> Self {
+        let elapsed_s = (elapsed_ms as f64) / 1_000.0;
+        let files_per_sec = if elapsed_s > 0.0 {
+            Some(workload.regular_file_count as f64 / elapsed_s)
+        } else {
+            None
+        };
+        let mib_per_sec = if elapsed_s > 0.0 {
+            Some((workload.total_bytes as f64 / 1024.0 / 1024.0) / elapsed_s)
+        } else {
+            None
+        };
+
         Self {
-            dataset: job.case.name.clone(),
+            workload: workload.name.clone(),
             baseline: job.baseline,
-            codec: job.codec,
             phase: phase.to_string(),
             command,
             elapsed_ms: Some(elapsed_ms),
+            files_per_sec,
+            mib_per_sec,
+            output_size_bytes,
             exit_status: Some(exit_status),
-            stdout: if stdout.is_empty() {
-                None
-            } else {
-                Some(stdout)
-            },
-            stderr: if stderr.is_empty() {
-                None
-            } else {
-                Some(stderr)
-            },
+            stdout: if stdout.is_empty() { None } else { Some(stdout) },
+            stderr: if stderr.is_empty() { None } else { Some(stderr) },
             notes: None,
             sfa_stats,
             resource_observation,

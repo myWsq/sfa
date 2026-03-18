@@ -2,7 +2,7 @@
 
 SFA, short for Small File Archive, is a manifest-first archive format and CLI for Unix directory trees with many small files. It is designed for deterministic scanning, sequential reads, integrity validation, and ordered restore behavior without treating `tar` compatibility as the primary goal.
 
-On the current committed macOS `aarch64` benchmark baseline, SFA is about `5x` faster than `tar` on the default small-text dataset and about `10x` faster on one current unpack control case when both use the same codec.
+On the current committed macOS `aarch64` benchmark baseline for the generated `node-modules-100k` workload, SFA packs about `34.9x` faster than `tar`, unpacks about `15.9x` faster, and produces an archive about `2.2x` smaller.
 
 SFA is not intended to be a drop-in replacement for `tar`. It focuses on a narrower problem: reliable local archiving and restore workflows for Unix-like directory trees where metadata, ordering, and small-file behavior matter.
 
@@ -13,7 +13,7 @@ SFA is a good fit when you need:
 - Fast pack and unpack workflows for Unix directory trees with many small files
 - Deterministic directory scanning and stable bundle planning
 - Sequential archive reads without seek-dependent restore logic
-- Benchmarkable comparisons against `tar` with the same codec settings
+- Benchmarkable comparisons against a canonical TAR baseline that matches the default SFA compression profile
 - Path safety checks, integrity validation, and explicit restore-policy controls
 
 SFA is not yet the right fit when you need:
@@ -109,16 +109,19 @@ sfa-cli pack ./input ./archive.sfa --stats-format json
 
 ## Benchmark Snapshot
 
-The repository benchmark baseline compares SFA and `tar` using the same codec settings on committed datasets. The current committed baseline was recorded on macOS `aarch64` with `/usr/bin/tar` (`bsdtar 3.5.3`), Homebrew `lz4` `1.10.0`, and Homebrew `zstd` `1.5.7`.
+The repository benchmark baseline uses the generated `node-modules-100k` workload under `benches/workloads/node-modules-100k/`. That workload materializes a deterministic nested dependency tree with `10,560` generated packages and `105,601` regular files, then compares default `sfa pack` / `sfa unpack` commands against `tar | zstd --fast=3` on the same tree.
 
-| Dataset | Codec | Command | SFA | `tar` | Relative Result |
-| --- | --- | --- | ---: | ---: | --- |
-| `small-text` | `lz4` | `pack` | `19 ms` | `95 ms` | SFA about `5.0x` faster |
-| `small-text` | `lz4` | `unpack` | `15 ms` | `76 ms` | SFA about `5.1x` faster |
-| `large-control` | `lz4` | `unpack` | `8 ms` | `81 ms` | SFA about `10.1x` faster |
-| `large-control` | `zstd` | `pack` | `9 ms` | `133 ms` | SFA about `14.8x` faster |
+The committed JSON baseline was recorded on macOS `aarch64` with `/usr/bin/tar` (`bsdtar 3.5.3`) and Homebrew `zstd` `1.5.7`. It reports wall time, files/s, MiB/s, archive size, and SFA pack/unpack observability for both pack and unpack.
 
-These numbers are repository baseline evidence, not universal guarantees. See [benches/README.md](benches/README.md), [benches/results/README.md](benches/results/README.md), and [spec/verification-and-benchmark.md](spec/verification-and-benchmark.md) for the full matrix, methodology, and interpretation guidance.
+| Workload | Measurement | SFA | `tar` | Relative Result |
+| --- | --- | ---: | ---: | --- |
+| `node-modules-100k` | `pack` | `9.8 s` | `340.6 s` | SFA about `34.9x` faster |
+| `node-modules-100k` | `unpack` | `15.3 s` | `242.2 s` | SFA about `15.9x` faster |
+| `node-modules-100k` | archive size | `5.5 MiB` | `12.3 MiB` | SFA about `2.2x` smaller |
+
+These numbers are repository baseline evidence, not universal guarantees.
+
+See [benches/README.md](benches/README.md), [benches/results/README.md](benches/results/README.md), and [spec/verification-and-benchmark.md](spec/verification-and-benchmark.md) for the workload contract, regeneration workflow, cache-warming caveats, and interpretation guidance.
 
 ## Features
 

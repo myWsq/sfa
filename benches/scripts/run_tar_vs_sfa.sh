@@ -34,8 +34,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-echo "[bench] running tar-vs-sfa benchmark harness"
+echo "[bench] running default-path node_modules-100k benchmark harness"
 echo "[bench] mode: ${MODE}"
+echo "[bench] baseline: sfa defaults vs tar | zstd --fast=3"
 
 RUN_ARGS=(--output "$OUTPUT")
 if [[ "$MODE" == "dry-run" ]]; then

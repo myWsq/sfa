@@ -14,12 +14,12 @@ When the repository closes a roadmap milestone or prepares a first stable v1 rel
 - **WHEN** maintainers conclude that the current M3 metadata-contract hardening slice has satisfied its closeout conditions for the stable v1 scope
 - **THEN** `ROADMAP.md` and the repository's top-level status summary both describe that slice as complete and identify stable-release preparation as the next repository step
 
-#### Scenario: Deferred follow-up work stays visible
-- **WHEN** release-facing documents are updated for milestone closeout or first-stable-release preparation
-- **THEN** work intentionally deferred to later milestones or post-v1 follow-up such as broader Unix metadata expansion remains documented instead of being implied as already delivered
+#### Scenario: Deferred post-v1 Unix work stays visible
+- **WHEN** release-facing documents are updated for M3 closeout and first-stable-release preparation
+- **THEN** xattrs, ACLs, and broader Unix metadata extensions remain documented as deferred follow-up work instead of being implied as already shipped in `v1.0.0`
 
 ### Requirement: Release artifacts are synchronized before tagging
-Before an SFA version tag is created, the repository SHALL synchronize the versioned release artifacts that describe what is being shipped. This synchronization MUST cover the workspace version, `CHANGELOG.md`, the in-repository release notes file for the target version, and release guidance inputs that identify the required verification checklist, candidate release scope, and compatibility framing for the release.
+Before an SFA version tag is created, the repository SHALL synchronize the versioned release artifacts that describe what is being shipped. This synchronization MUST cover the workspace version, `CHANGELOG.md`, the in-repository release notes file for the target version, and release guidance inputs that identify the required verification checklist, candidate release scope, and compatibility framing for that release.
 
 #### Scenario: Maintainer prepares a version tag
 - **WHEN** a maintainer updates the repository for the next SFA version
@@ -29,9 +29,9 @@ Before an SFA version tag is created, the repository SHALL synchronize the versi
 - **WHEN** a maintainer updates the repository for the first stable SFA version tag from a selected candidate revision
 - **THEN** the workspace version, changelog entry, in-repo release notes, and release guidance inputs all describe the same stable release target and included change scope before the tag is created
 
-#### Scenario: Reviewer audits release inputs from the repository alone
-- **WHEN** a reviewer inspects the repository before a version tag is pushed
-- **THEN** they can determine the intended release version, the included change summary, the deferred follow-up work, and the required verification steps without relying on out-of-band notes
+#### Scenario: Reviewer audits first stable release inputs from the repository alone
+- **WHEN** a reviewer inspects the repository before the first stable version tag is pushed
+- **THEN** they can determine the intended release version, the included candidate scope, the deferred follow-up work, and the required verification steps without relying on out-of-band notes
 
 ### Requirement: Repository-level release-prep changes are OpenSpec traceable
 Repository-wide release-preparation or milestone-closeout work that changes quality gates, release guidance, or milestone status SHALL be captured through an OpenSpec change with reviewable proposal, design, and task artifacts.

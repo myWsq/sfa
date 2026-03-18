@@ -1,19 +1,20 @@
-use std::collections::BTreeMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use std::time::Instant;
 
+use tempfile::TempDir;
 use walkdir::WalkDir;
 
 use crate::harness::{
-    BenchmarkJob, Codec, CommandSpec, archive_path, build_pack_command, build_unpack_command,
-    unpack_dir,
+    BenchmarkJob, BenchmarkPaths, CommandSpec, archive_path, build_pack_command,
+    build_unpack_command, dry_run_paths, unpack_dir,
 };
 use crate::report::{
-    BenchmarkEnvironment, BenchmarkRecord, BenchmarkSuiteReport, CodecToolMetadata, DatasetSummary,
-    ResourceObservation, ResourceSamplerMetadata, SfaCommandStats, ToolMetadata,
+    BenchmarkEnvironment, BenchmarkRecord, BenchmarkSuiteReport, ResourceObservation,
+    ResourceSamplerMetadata, SfaCommandStats, ToolMetadata,
 };
+use crate::workload::{BenchmarkWorkload, WorkloadSummary};
 use sfa_core::{PackStats, UnpackStats};
 
 #[derive(Debug, Clone)]
@@ -37,7 +38,7 @@ impl RunnerConfig {
 struct PreparedTools {
     resolved_sfa_bin: PathBuf,
     tar_bin: PathBuf,
-    codec_bins: BTreeMap<Codec, PathBuf>,
+    zstd_bin: PathBuf,
     environment: BenchmarkEnvironment,
     resource_sampler: ResourceSampler,
 }
@@ -106,29 +107,45 @@ pub fn run_jobs(
     jobs: &[BenchmarkJob],
     cfg: &RunnerConfig,
 ) -> Result<BenchmarkSuiteReport, Box<dyn std::error::Error + Send + Sync>> {
-    let datasets = summarize_datasets(jobs)?;
-    let tools = prepare_tools(jobs, cfg)?;
+    let workload = BenchmarkWorkload::load_default()?;
+    let planned_workload = workload.planned_summary()?;
+    workload.ensure_summary_matches_contract(&planned_workload)?;
+    let tools = prepare_tools(cfg)?;
+    let (_workspace, paths, workload_summary) =
+        materialize_workload(&workload, &planned_workload, cfg.dry_run)?;
+
     let mut report = BenchmarkSuiteReport::new(
         cfg.invocation.clone(),
         cfg.dry_run,
         tools.environment.clone(),
-        datasets,
+        workload_summary.clone(),
     )
     .stamp();
 
     for job in jobs {
-        prepare_job_workspace(job)?;
+        prepare_job_workspace(job, &paths)?;
 
-        let codec_bin = tools
-            .codec_bins
-            .get(&job.codec)
-            .ok_or_else(|| format!("missing codec tool for {}", job.codec.as_str()))?;
-        let pack = build_pack_command(job, &tools.resolved_sfa_bin, &tools.tar_bin, codec_bin);
-        let unpack = build_unpack_command(job, &tools.resolved_sfa_bin, &tools.tar_bin, codec_bin);
+        let pack = build_pack_command(
+            job,
+            &paths,
+            &tools.resolved_sfa_bin,
+            &tools.tar_bin,
+            &tools.zstd_bin,
+        );
+        let unpack = build_unpack_command(
+            job,
+            &paths,
+            &tools.resolved_sfa_bin,
+            &tools.tar_bin,
+            &tools.zstd_bin,
+        );
+
         report.records.push(run_record(
             job,
             "pack",
             &pack,
+            &paths,
+            &workload_summary,
             cfg.dry_run,
             &tools.resource_sampler,
         )?);
@@ -136,25 +153,50 @@ pub fn run_jobs(
             job,
             "unpack",
             &unpack,
+            &paths,
+            &workload_summary,
             cfg.dry_run,
             &tools.resource_sampler,
         )?);
-        cleanup_job_workspace(job)?;
+        cleanup_job_workspace(job, &paths)?;
     }
+
     Ok(report)
+}
+
+fn materialize_workload(
+    workload: &BenchmarkWorkload,
+    planned_workload: &WorkloadSummary,
+    dry_run: bool,
+) -> Result<(Option<TempDir>, BenchmarkPaths, WorkloadSummary), Box<dyn std::error::Error + Send + Sync>>
+{
+    if dry_run {
+        let paths = dry_run_paths(workload);
+        return Ok((None, paths, planned_workload.clone()));
+    }
+
+    let workspace = tempfile::tempdir().map_err(|e| format!("failed to create temp workspace: {e}"))?;
+    let paths = BenchmarkPaths {
+        workload_name: workload.name().to_string(),
+        input_dir: workspace.path().join("input"),
+        workspace_dir: workspace.path().to_path_buf(),
+    };
+    let summary = workload.materialize(&paths.input_dir)?;
+    Ok((Some(workspace), paths, summary))
 }
 
 fn prepare_job_workspace(
     job: &BenchmarkJob,
+    paths: &BenchmarkPaths,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    std::fs::create_dir_all(&job.case.output_dir).map_err(|e| {
+    std::fs::create_dir_all(paths.workspace_dir.join("artifacts")).map_err(|e| {
         format!(
-            "failed to create output dir {}: {e}",
-            job.case.output_dir.display()
+            "failed to create benchmark artifact dir {}: {e}",
+            paths.workspace_dir.join("artifacts").display()
         )
     })?;
-    let archive = archive_path(job);
-    let unpack = unpack_dir(job);
+    let archive = archive_path(job, paths);
+    let unpack = unpack_dir(job, paths);
     remove_path_if_exists(&archive)?;
     remove_path_if_exists(&unpack)?;
     std::fs::create_dir_all(&unpack)
@@ -164,9 +206,10 @@ fn prepare_job_workspace(
 
 fn cleanup_job_workspace(
     job: &BenchmarkJob,
+    paths: &BenchmarkPaths,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    remove_path_if_exists(&archive_path(job))?;
-    remove_path_if_exists(&unpack_dir(job))?;
+    remove_path_if_exists(&archive_path(job, paths))?;
+    remove_path_if_exists(&unpack_dir(job, paths))?;
     Ok(())
 }
 
@@ -174,12 +217,15 @@ fn run_record(
     job: &BenchmarkJob,
     phase: &'static str,
     cmd: &CommandSpec,
+    paths: &BenchmarkPaths,
+    workload: &WorkloadSummary,
     dry_run: bool,
     resource_sampler: &ResourceSampler,
 ) -> Result<BenchmarkRecord, Box<dyn std::error::Error + Send + Sync>> {
     if dry_run {
         return Ok(BenchmarkRecord::from_dry_run(
             job,
+            workload,
             phase,
             cmd.to_shell_line(),
         ));
@@ -195,13 +241,12 @@ fn run_record(
     let status = execution.output.status.code().unwrap_or(1);
     if status != 0 {
         return Err(format!(
-            "benchmark command failed for {} {} {} {}: exit {status}\ncommand: {}\nstdout:\n{}\nstderr:\n{}",
-            job.case.name,
+            "benchmark command failed for {} {} {}: exit {status}\ncommand: {}\nstdout:\n{}\nstderr:\n{}",
+            paths.workload_name,
             match job.baseline {
                 crate::harness::Baseline::Sfa => "sfa",
                 crate::harness::Baseline::Tar => "tar",
             },
-            job.codec.as_str(),
             phase,
             cmd.to_shell_line(),
             stdout,
@@ -209,6 +254,12 @@ fn run_record(
         )
         .into());
     }
+
+    let output_size_bytes = match phase {
+        "pack" => std::fs::metadata(archive_path(job, paths)).ok().map(|metadata| metadata.len()),
+        "unpack" => Some(total_file_bytes(&unpack_dir(job, paths))?),
+        other => return Err(format!("unsupported benchmark phase: {other}").into()),
+    };
 
     let sfa_stats = match job.baseline {
         crate::harness::Baseline::Sfa => Some(parse_sfa_stats(phase, &stdout)?),
@@ -220,9 +271,11 @@ fn run_record(
 
     Ok(BenchmarkRecord::from_execution(
         job,
+        workload,
         phase,
         cmd.to_shell_line(),
         elapsed_ms,
+        output_size_bytes,
         status,
         stdout,
         stderr,
@@ -231,6 +284,18 @@ fn run_record(
             .resource_observation
             .or_else(|| Some(resource_sampler.unavailable_observation())),
     ))
+}
+
+fn total_file_bytes(path: &Path) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
+    let mut total = 0u64;
+    for entry in WalkDir::new(path).follow_links(false) {
+        let entry = entry?;
+        let metadata = entry.metadata()?;
+        if metadata.is_file() {
+            total = total.saturating_add(metadata.len());
+        }
+    }
+    Ok(total)
 }
 
 fn command_output(
@@ -269,17 +334,14 @@ pub fn write_report(
 }
 
 fn prepare_tools(
-    jobs: &[BenchmarkJob],
     cfg: &RunnerConfig,
 ) -> Result<PreparedTools, Box<dyn std::error::Error + Send + Sync>> {
     let resolved_sfa_bin = resolve_sfa_bin(&cfg.sfa_bin);
     let tar = resolve_optional_command("tar")?;
-    let lz4 = resolve_optional_command("lz4")?;
     let zstd = resolve_optional_command("zstd")?;
     let resource_sampler = ResourceSampler::detect();
 
     if !cfg.dry_run {
-        ensure_input_dirs_populated(jobs)?;
         let sfa_bin = resolved_sfa_bin
             .clone()
             .ok_or_else(|| missing_sfa_bin_message(&cfg.sfa_bin))?;
@@ -289,128 +351,84 @@ fn prepare_tools(
         let tar_bin = tar
             .clone()
             .ok_or_else(|| "required tool `tar` was not found on PATH".to_string())?;
-        let lz4_bin = lz4
-            .clone()
-            .ok_or_else(|| "required tool `lz4` was not found on PATH".to_string())?;
         let zstd_bin = zstd
             .clone()
             .ok_or_else(|| "required tool `zstd` was not found on PATH".to_string())?;
+        ensure_tar_zstd_workflow_supported(&tar_bin, &zstd_bin)?;
 
         Ok(PreparedTools {
             resolved_sfa_bin: sfa_bin,
             tar_bin,
-            codec_bins: BTreeMap::from([(Codec::Lz4, lz4_bin), (Codec::Zstd, zstd_bin)]),
-            environment: build_environment(
-                resolved_sfa_bin,
-                tar,
-                lz4,
-                zstd,
-                resource_sampler.metadata(),
-            ),
+            zstd_bin,
+            environment: build_environment(resolved_sfa_bin, tar, zstd, resource_sampler.metadata()),
             resource_sampler,
         })
     } else {
         Ok(PreparedTools {
-            resolved_sfa_bin: resolved_sfa_bin
-                .clone()
-                .unwrap_or_else(|| cfg.sfa_bin.clone()),
+            resolved_sfa_bin: resolved_sfa_bin.clone().unwrap_or_else(|| cfg.sfa_bin.clone()),
             tar_bin: tar.clone().unwrap_or_else(|| PathBuf::from("tar")),
-            codec_bins: BTreeMap::from([
-                (
-                    Codec::Lz4,
-                    lz4.clone().unwrap_or_else(|| PathBuf::from("lz4")),
-                ),
-                (
-                    Codec::Zstd,
-                    zstd.clone().unwrap_or_else(|| PathBuf::from("zstd")),
-                ),
-            ]),
-            environment: build_environment(
-                resolved_sfa_bin,
-                tar,
-                lz4,
-                zstd,
-                resource_sampler.metadata(),
-            ),
+            zstd_bin: zstd.clone().unwrap_or_else(|| PathBuf::from("zstd")),
+            environment: build_environment(resolved_sfa_bin, tar, zstd, resource_sampler.metadata()),
             resource_sampler,
         })
     }
 }
 
-fn ensure_input_dirs_populated(
-    jobs: &[BenchmarkJob],
+fn ensure_tar_zstd_workflow_supported(
+    tar_bin: &Path,
+    zstd_bin: &Path,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    for summary in summarize_datasets(jobs)? {
-        if summary.file_count == 0 || summary.total_bytes == 0 {
-            return Err(format!(
-                "benchmark dataset `{}` does not contain committed input files under {}",
-                summary.dataset, summary.input_dir
-            )
-            .into());
-        }
-    }
-    Ok(())
-}
+    let probe_dir = tempfile::tempdir().map_err(|e| format!("failed to create probe dir: {e}"))?;
+    let input_dir = probe_dir.path().join("input");
+    let archive = probe_dir.path().join("probe.tar.zst");
+    let output_dir = probe_dir.path().join("out");
+    std::fs::create_dir_all(&input_dir)?;
+    std::fs::write(input_dir.join("probe.txt"), "benchmark probe\n")?;
+    std::fs::create_dir_all(&output_dir)?;
 
-fn summarize_datasets(
-    jobs: &[BenchmarkJob],
-) -> Result<Vec<DatasetSummary>, Box<dyn std::error::Error + Send + Sync>> {
-    let mut unique_cases = BTreeMap::new();
-    for job in jobs {
-        unique_cases
-            .entry(job.case.name.clone())
-            .or_insert_with(|| job.case.clone());
-    }
-
-    unique_cases
-        .into_values()
-        .map(|case| summarize_dataset(&case))
-        .collect()
-}
-
-fn summarize_dataset(
-    case: &crate::harness::DatasetCase,
-) -> Result<DatasetSummary, Box<dyn std::error::Error + Send + Sync>> {
-    if !case.input_dir.is_dir() {
+    let pack = Command::new("sh")
+        .arg("-c")
+        .arg("set -eu; \"$1\" -cf - -C \"$2\" . | \"$3\" -q --fast=3 -f -o \"$4\"")
+        .arg("sh")
+        .arg(tar_bin)
+        .arg(&input_dir)
+        .arg(zstd_bin)
+        .arg(&archive)
+        .env("LC_ALL", "C")
+        .output()?;
+    if !pack.status.success() {
         return Err(format!(
-            "benchmark input dir is missing: {}",
-            case.input_dir.display()
+            "canonical tar + zstd --fast=3 benchmark workflow is unavailable\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&pack.stdout),
+            String::from_utf8_lossy(&pack.stderr)
         )
         .into());
     }
 
-    let mut file_count = 0u64;
-    let mut directory_count = 0u64;
-    let mut symlink_count = 0u64;
-    let mut total_bytes = 0u64;
-
-    for entry in WalkDir::new(&case.input_dir).follow_links(false) {
-        let entry = entry?;
-        let metadata = entry.metadata()?;
-        if metadata.is_file() {
-            file_count += 1;
-            total_bytes += metadata.len();
-        } else if metadata.is_dir() {
-            directory_count += 1;
-        } else if metadata.file_type().is_symlink() {
-            symlink_count += 1;
-        }
+    let unpack = Command::new("sh")
+        .arg("-c")
+        .arg("set -eu; \"$1\" -q -d -c \"$2\" | \"$3\" -xf - -C \"$4\"")
+        .arg("sh")
+        .arg(zstd_bin)
+        .arg(&archive)
+        .arg(tar_bin)
+        .arg(&output_dir)
+        .env("LC_ALL", "C")
+        .output()?;
+    if !unpack.status.success() {
+        return Err(format!(
+            "canonical tar + zstd --fast=3 unpack workflow is unavailable\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&unpack.stdout),
+            String::from_utf8_lossy(&unpack.stderr)
+        )
+        .into());
     }
-
-    Ok(DatasetSummary {
-        dataset: case.name.clone(),
-        input_dir: case.input_dir.display().to_string(),
-        file_count,
-        directory_count,
-        symlink_count,
-        total_bytes,
-    })
+    Ok(())
 }
 
 fn build_environment(
     sfa_bin: Option<PathBuf>,
     tar_bin: Option<PathBuf>,
-    lz4_bin: Option<PathBuf>,
     zstd_bin: Option<PathBuf>,
     resource_sampler: ResourceSamplerMetadata,
 ) -> BenchmarkEnvironment {
@@ -419,16 +437,7 @@ fn build_environment(
         host_arch: std::env::consts::ARCH.to_string(),
         tar: tool_metadata("tar", tar_bin.as_deref()),
         sfa: tool_metadata("sfa", sfa_bin.as_deref()),
-        codecs: vec![
-            CodecToolMetadata {
-                codec: Codec::Lz4,
-                tool: tool_metadata("lz4", lz4_bin.as_deref()),
-            },
-            CodecToolMetadata {
-                codec: Codec::Zstd,
-                tool: tool_metadata("zstd", zstd_bin.as_deref()),
-            },
-        ],
+        zstd: tool_metadata("zstd", zstd_bin.as_deref()),
         resource_sampler,
     }
 }

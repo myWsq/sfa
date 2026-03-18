@@ -1,0 +1,64 @@
+{
+  "name": "node-modules-100k",
+  "description": "Deterministic node_modules-style workload for the default SFA benchmark path",
+  "root_package_name": "benchmark-root-app",
+  "root_packages": 64,
+  "fanout_per_depth": [4, 4, 3, 2],
+  "scoped_package_period": 3,
+  "scopes": ["@types", "@babel", "@eslint", "@jest", "@rollup", "@sfa-bench"],
+  "root_templates": [
+    {
+      "relative_path": "package.json",
+      "template": "templates/root-package.json.tpl"
+    }
+  ],
+  "package_templates": [
+    {
+      "relative_path": "package.json",
+      "template": "templates/package.json.tpl"
+    },
+    {
+      "relative_path": "README.md",
+      "template": "templates/README.md.tpl"
+    },
+    {
+      "relative_path": "LICENSE",
+      "template": "templates/LICENSE.tpl"
+    },
+    {
+      "relative_path": "index.js",
+      "template": "templates/index.js.tpl"
+    },
+    {
+      "relative_path": "index.d.ts",
+      "template": "templates/index.d.ts.tpl"
+    },
+    {
+      "relative_path": "dist/index.js",
+      "template": "templates/dist-index.js.tpl"
+    },
+    {
+      "relative_path": "dist/index.cjs",
+      "template": "templates/dist-index.cjs.tpl"
+    },
+    {
+      "relative_path": "runtime.js",
+      "template": "templates/dist-index.js.tpl"
+    },
+    {
+      "relative_path": "config.json",
+      "template": "templates/schema.json.tpl"
+    },
+    {
+      "relative_path": "cli.js",
+      "template": "templates/cli.js.tpl"
+    }
+  ],
+  "expected_contract": {
+    "package_count": 10560,
+    "regular_file_count": 105601,
+    "max_package_depth": 5,
+    "min_directory_count": 25000,
+    "dominant_file_types": ["js", "json", "d.ts", "md", "text"]
+  }
+}

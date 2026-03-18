@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use sfa_bench::harness::default_matrix;
+use sfa_bench::harness::default_jobs;
 use sfa_bench::runner::{RunnerConfig, run_jobs, write_report};
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 
     let cfg = RunnerConfig::new(sfa_bin, dry_run, args.join(" "));
-    let jobs = default_matrix();
+    let jobs = default_jobs();
     let report = run_jobs(&jobs, &cfg)?;
     write_report(&report, &out)?;
 

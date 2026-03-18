@@ -29,11 +29,11 @@ On successful pack and unpack operations, the CLI SHALL report codec, thread cou
 - **THEN** the CLI prints a summary that includes throughput and archive-structure statistics needed for tuning and comparison
 
 ### Requirement: Benchmark tooling compares SFA against tar with the same codec
-The project SHALL include benchmark tooling that runs pack and unpack measurements against `tar + same codec` for at least a small-text dataset, a small-binary mixed dataset, and a large-file control dataset. Benchmark output MUST record wall time, files per second, MiB per second, output size, CPU usage, and RSS.
+The project SHALL include benchmark tooling that runs pack and unpack measurements for the default SFA user path against a canonical TAR baseline that uses `tar` piped through `zstd -3`. The default benchmark SHALL execute `sfa pack <input> <archive>` and `sfa unpack <archive> -C <output>` without overriding codec, compression level, thread count, bundle-target, small-file-threshold, or integrity parameters. Benchmark output MUST record wall time, files per second, MiB per second, output size, CPU usage, and RSS.
 
-#### Scenario: Benchmark suite executes the comparison set
-- **WHEN** the benchmark harness is run for the default dataset set
-- **THEN** it executes both SFA and `tar + same codec` workflows and stores comparable metrics for each dataset and codec combination
+#### Scenario: Benchmark suite executes the default-path comparison
+- **WHEN** the benchmark harness is run for the default benchmark workload
+- **THEN** it executes the default SFA pack and unpack commands together with the canonical `tar | zstd -3` baseline on the same workload and stores comparable metrics for each phase
 
 ### Requirement: Test suites cover protocol, streaming, corruption, and safety baselines
 Before the first v1 release, the project SHALL include automated tests for roundtrip correctness, fragmented sequential input, corruption rejection, path safety, golden archive compatibility, metadata roundtrip for supported Unix entries, and CLI behavior regressions for documented defaults, supported input-mode combinations, and expected usage failures. This verification coverage MUST include checks that supported restores preserve `mode` and `mtime` for regular files and directories, that the default unpack path leaves owner restoration disabled, and that link and safety scenarios remain represented in committed fixtures or tests.
@@ -43,25 +43,33 @@ Before the first v1 release, the project SHALL include automated tests for round
 - **THEN** the suite includes protocol, streaming, corruption, security, golden-archive, metadata-restore, and CLI regression cases for the v1 feature set
 
 ### Requirement: Benchmark datasets are committed and documented for the default matrix
-The repository SHALL provide committed input trees for the default benchmark matrix under `tests/fixtures/datasets/small-text/input`, `tests/fixtures/datasets/small-binary/input`, and `tests/fixtures/datasets/large-control/input`. Each dataset MUST contain real benchmark content rather than placeholders, and each dataset directory MUST include accompanying documentation that identifies the dataset purpose, construction or provenance, and a stable summary of its scale.
+The repository SHALL provide a committed workload recipe for the default benchmark under repository-controlled benchmark assets rather than relying on a checked-in `100k+` input tree. The default benchmark workload MUST generate a deterministic `node_modules`-style deep directory tree without network access, MUST produce at least `100,000` regular files, and MUST document its generation inputs, directory-depth expectations, dominant file types, and stable size summary.
 
-#### Scenario: Maintainer inspects the default datasets
-- **WHEN** a maintainer reviews the benchmark fixture directories in a clean checkout
-- **THEN** each default dataset contains committed input files and dataset documentation without requiring an external download step
+#### Scenario: Maintainer inspects the default benchmark workload definition
+- **WHEN** a maintainer reviews the benchmark workload assets in a clean checkout
+- **THEN** they can find the committed recipe, templates, and documentation needed to generate the default benchmark input tree offline
+
+#### Scenario: Generated workload matches the target shape
+- **WHEN** a maintainer generates the default benchmark workload from the committed recipe
+- **THEN** the resulting input tree contains at least `100,000` regular files arranged in `node_modules`-style nested package subtrees rather than only flat repeated copies of a seed directory
 
 ### Requirement: Benchmark runner validates prerequisites before executing the default matrix
-When the default benchmark matrix is run in non-dry-run mode, the benchmark tooling MUST validate the required execution prerequisites before starting measurements. This validation MUST cover the requested `sfa` binary path, the presence of committed dataset inputs, support for the requested `tar + same codec` workflow on the current host, and creation of the archive and unpack output directories needed by each job. If any prerequisite is not met, the runner MUST fail with an actionable error before recording a partial comparison result set.
+When the default benchmark is run in non-dry-run mode, the benchmark tooling MUST validate the required execution prerequisites before starting measurements. This validation MUST cover the requested `sfa` binary path, the presence and integrity of the committed workload recipe inputs, support for the canonical `tar + zstd -3` workflow on the current host, availability of any required temporary workspace for generating the workload, and creation of the archive and unpack output directories needed by each job. If any prerequisite is not met, the runner MUST fail with an actionable error before recording a partial comparison result set.
 
-#### Scenario: Host cannot satisfy the tar codec prerequisites
-- **WHEN** a maintainer runs the benchmark suite on a host whose `tar` implementation does not support one of the requested codecs
-- **THEN** the runner reports which prerequisite is unmet and stops before executing the affected benchmark matrix
+#### Scenario: Host cannot satisfy the default tar baseline prerequisites
+- **WHEN** a maintainer runs the benchmark suite on a host where `tar` or `zstd` cannot execute the canonical `zstd -3` workflow
+- **THEN** the runner reports which prerequisite is unmet and stops before executing the benchmark
+
+#### Scenario: Workload recipe cannot be materialized
+- **WHEN** a maintainer runs the benchmark suite and the committed workload recipe is missing, invalid, or cannot generate the required temporary input tree
+- **THEN** the runner fails before benchmark execution with an actionable error that identifies the missing or invalid workload asset
 
 ### Requirement: Benchmark baseline results are recorded as repository assets
-The repository SHALL include at least one committed, machine-readable benchmark result set for the default matrix under `benches/results/`. Benchmark documentation and release guidance MUST identify the command used to generate the baseline, the environment constraints for interpreting it, and the situations that require refreshing the committed result set.
+The repository SHALL include at least one committed, machine-readable benchmark result set for the default benchmark under `benches/results/`. Benchmark documentation and release guidance MUST identify the command used to generate the baseline, the workload recipe identity or generation parameters used for that run, the supported host environment for interpreting it, and the situations that require refreshing the committed result set.
 
-#### Scenario: Release reviewer audits the performance baseline
-- **WHEN** a reviewer prepares an SFA release without rerunning the benchmark suite locally
-- **THEN** the repository contains a committed benchmark result asset and documentation that explain how it was generated and when it must be refreshed
+#### Scenario: Release reviewer audits the default benchmark baseline
+- **WHEN** a reviewer prepares an SFA release without rerunning the full benchmark suite locally
+- **THEN** the repository contains a committed benchmark result asset and documentation that explain which default-path workload was used, how it was generated, how the commands were run, and when the result must be refreshed
 
 ### Requirement: SFA commands expose structured phase breakdown for benchmark consumers
 When `sfa pack` or `sfa unpack` is invoked in a machine-readable stats mode, the command SHALL emit structured execution statistics with the existing total counters and the existing stable phase breakdown schema. Unpack statistics MUST continue to include diagnostic `phase_breakdown` fields `header`, `manifest`, `frame_read`, `decode`, `scatter`, and `restore_finalize`, and these fields SHALL remain valid even when they overlap in a parallel pipeline. Unpack statistics MUST additionally expose an additive `wall_breakdown` that identifies stable contiguous wall-time buckets for `setup`, `pipeline`, and `finalize`. The serialized `wall_breakdown` values MUST sum exactly to the reported unpack `duration_ms`. Dry-run execution MUST NOT fabricate measured phase or wall-breakdown durations.
@@ -94,15 +102,15 @@ The benchmark runner SHALL continue to record command wall-time for every benchm
 - **THEN** the benchmark record still contains wall-time results and marks resource fields unavailable with an explanatory note instead of recording zero values
 
 ### Requirement: Benchmark and verification artifacts stay auditable after pipeline realignment
-The benchmark runner SHALL continue to record command wall-time for every benchmark record and SHALL additionally persist the structured unpack observability emitted by the CLI. Verification and thread-sweep documentation for unpack SHALL describe the three-stage reader/decode/scatter execution model, the difference between additive wall buckets and overlapping diagnostic phase windows, the representative multi-bundle small-file workload used to diagnose setup bottlenecks, how to control for cache warming when comparing repeated unpack runs, the effective thread count used for diagnostics, and the `.sfa-untrusted` behavior on strong trailer failures.
+The benchmark runner SHALL continue to record command wall-time for every benchmark record and SHALL additionally persist the structured unpack observability emitted by the CLI. Verification and benchmark documentation for unpack SHALL describe the `node_modules`-style deep-directory workload used for default-path evidence, the difference between additive wall buckets and overlapping diagnostic phase windows, how repeated runs can warm caches on that workload, the effective thread count used by default or by explicit override, and the `.sfa-untrusted` behavior on strong trailer failures.
 
-#### Scenario: Diagnostic unpack sweep remains comparable after setup optimization
-- **WHEN** a maintainer runs a diagnostic unpack benchmark or thread sweep on a representative multi-bundle small-file workload after setup optimization work lands
-- **THEN** the resulting artifacts preserve the thread-count and unpack timing fields needed to compare setup bottlenecks against prior runs
+#### Scenario: Diagnostic unpack sweep remains comparable after benchmark repositioning
+- **WHEN** a maintainer runs a diagnostic unpack benchmark or thread sweep on the representative `node_modules`-style workload after this benchmark redesign lands
+- **THEN** the resulting artifacts preserve the thread-count and unpack timing fields needed to compare setup and scatter bottlenecks against prior runs
 
-#### Scenario: Verification docs explain cache-sensitive setup analysis
+#### Scenario: Verification docs explain cache-sensitive default workload analysis
 - **WHEN** a maintainer updates benchmark or verification documentation for unpack
-- **THEN** the docs identify the representative setup-focused workload, explain how repeated runs can warm caches during setup comparisons, and mention that strong trailer failures leave `.sfa-untrusted` in the output root even though the command returns an integrity error
+- **THEN** the docs identify the representative `node_modules`-style workload, explain how to control cache warming when comparing repeated runs on that workload, and mention that strong trailer failures leave `.sfa-untrusted` in the output root even though the command returns an integrity error
 
 ### Requirement: Committed baseline assets preserve observability coverage guidance
 The repository SHALL keep the committed benchmark baseline readable after observability fields are added, and the benchmark-facing documentation MUST identify which environments are expected to populate resource metrics, how unavailable metrics are represented, and when the committed baseline must be refreshed after observability-related runner or schema changes.
@@ -138,13 +146,13 @@ The repository SHALL define a release-verification checklist for SFA that includ
 - **THEN** the release-preparation workflow fails before a version tag is created and the formatting drift is treated as a blocker rather than an informational warning
 
 ### Requirement: Benchmark release guidance distinguishes mandatory dry-run from conditional baseline refresh
-Release guidance for benchmark verification SHALL require the benchmark dry-run command on every release-preparation pass and MUST describe committed baseline refresh as conditional on benchmark-affecting changes such as runner logic, dataset contents, codec integration, planner semantics, or observability schema updates.
+Release guidance for benchmark verification SHALL require the benchmark dry-run command on every release-preparation pass and MUST describe committed baseline refresh as conditional on benchmark-affecting changes such as default workload recipe changes, default command-profile changes, runner logic changes, benchmark result schema changes, unpack observability changes, or supported benchmark host/toolchain changes.
 
-#### Scenario: Release prep without benchmark-affecting changes
-- **WHEN** a maintainer prepares a release whose changes do not alter benchmark behavior or committed datasets
+#### Scenario: Release prep without default-benchmark changes
+- **WHEN** a maintainer prepares a release whose changes do not alter the default benchmark workload, command profile, runner behavior, or result schema
 - **THEN** benchmark dry-run remains part of the mandatory checklist and a fresh committed baseline refresh is not required
 
-#### Scenario: Benchmark-affecting change requires baseline refresh
-- **WHEN** a maintainer prepares a release that changes benchmark logic, committed datasets, codec support, planner behavior, or benchmark result schema
+#### Scenario: Default benchmark contract changes require baseline refresh
+- **WHEN** a maintainer prepares a release that changes the default benchmark workload recipe, the canonical `tar + zstd -3` baseline, default SFA command profile, runner behavior, or benchmark result schema
 - **THEN** the release guidance requires refreshing the committed baseline asset in addition to the mandatory dry-run verification
 

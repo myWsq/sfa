@@ -1,22 +1,6 @@
 use std::path::{Path, PathBuf};
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum Codec {
-    Lz4,
-    Zstd,
-}
-
-impl Codec {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Lz4 => "lz4",
-            Self::Zstd => "zstd",
-        }
-    }
-}
+use crate::workload::BenchmarkWorkload;
 
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
@@ -28,17 +12,15 @@ pub enum Baseline {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct DatasetCase {
-    pub name: String,
-    pub input_dir: PathBuf,
-    pub output_dir: PathBuf,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BenchmarkJob {
     pub baseline: Baseline,
-    pub codec: Codec,
-    pub case: DatasetCase,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BenchmarkPaths {
+    pub workload_name: String,
+    pub input_dir: PathBuf,
+    pub workspace_dir: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -58,99 +40,94 @@ impl CommandSpec {
     }
 }
 
-pub fn default_cases() -> Vec<DatasetCase> {
+pub fn default_jobs() -> Vec<BenchmarkJob> {
     vec![
-        DatasetCase {
-            name: "small-text".to_string(),
-            input_dir: PathBuf::from("tests/fixtures/datasets/small-text/input"),
-            output_dir: PathBuf::from("tests/fixtures/datasets/small-text/output"),
+        BenchmarkJob {
+            baseline: Baseline::Sfa,
         },
-        DatasetCase {
-            name: "small-binary".to_string(),
-            input_dir: PathBuf::from("tests/fixtures/datasets/small-binary/input"),
-            output_dir: PathBuf::from("tests/fixtures/datasets/small-binary/output"),
-        },
-        DatasetCase {
-            name: "large-control".to_string(),
-            input_dir: PathBuf::from("tests/fixtures/datasets/large-control/input"),
-            output_dir: PathBuf::from("tests/fixtures/datasets/large-control/output"),
+        BenchmarkJob {
+            baseline: Baseline::Tar,
         },
     ]
 }
 
-pub fn default_matrix() -> Vec<BenchmarkJob> {
-    let mut jobs = Vec::new();
-    for case in default_cases() {
-        for baseline in [Baseline::Sfa, Baseline::Tar] {
-            for codec in [Codec::Lz4, Codec::Zstd] {
-                jobs.push(BenchmarkJob {
-                    baseline,
-                    codec,
-                    case: case.clone(),
-                });
-            }
-        }
+pub fn dry_run_paths(workload: &BenchmarkWorkload) -> BenchmarkPaths {
+    let workspace_dir = std::env::temp_dir().join(format!("sfa-bench-dry-run-{}", workload.name()));
+    BenchmarkPaths {
+        workload_name: workload.name().to_string(),
+        input_dir: workspace_dir.join("input"),
+        workspace_dir,
     }
-    jobs
 }
 
-pub fn archive_name(case_name: &str, baseline: Baseline, codec: Codec) -> String {
+pub fn archive_name(workload_name: &str, baseline: Baseline) -> String {
     match baseline {
-        Baseline::Sfa => format!("{case_name}.{}.sfa", codec.as_str()),
-        Baseline::Tar => format!("{case_name}.tar.{}", codec.as_str()),
+        Baseline::Sfa => format!("{workload_name}.sfa"),
+        Baseline::Tar => format!("{workload_name}.tar.zst"),
     }
 }
 
-pub fn archive_path(job: &BenchmarkJob) -> PathBuf {
-    job.case
-        .output_dir
-        .join(archive_name(&job.case.name, job.baseline, job.codec))
+pub fn archive_path(job: &BenchmarkJob, paths: &BenchmarkPaths) -> PathBuf {
+    paths
+        .workspace_dir
+        .join("artifacts")
+        .join(archive_name(&paths.workload_name, job.baseline))
 }
 
-pub fn unpack_dir(job: &BenchmarkJob) -> PathBuf {
-    job.case.output_dir.join(format!(
-        "unpack-{}-{}-{}",
-        job.case.name,
+pub fn unpack_dir(job: &BenchmarkJob, paths: &BenchmarkPaths) -> PathBuf {
+    paths.workspace_dir.join(format!(
+        "unpack-{}-{}",
+        paths.workload_name,
         match job.baseline {
             Baseline::Sfa => "sfa",
             Baseline::Tar => "tar",
         },
-        job.codec.as_str()
     ))
 }
 
 pub fn build_pack_command(
     job: &BenchmarkJob,
+    paths: &BenchmarkPaths,
     sfa_bin: &Path,
     tar_bin: &Path,
-    codec_bin: &Path,
+    zstd_bin: &Path,
 ) -> CommandSpec {
-    let archive = archive_path(job);
+    let archive = archive_path(job, paths);
     match job.baseline {
         Baseline::Sfa => CommandSpec {
             program: sfa_bin.display().to_string(),
             args: vec![
                 "pack".to_string(),
-                job.case.input_dir.display().to_string(),
+                paths.input_dir.display().to_string(),
                 archive.display().to_string(),
-                "--codec".to_string(),
-                job.codec.as_str().to_string(),
                 "--stats-format".to_string(),
                 "json".to_string(),
             ],
         },
-        Baseline::Tar => build_tar_pack_command(job, tar_bin, codec_bin, &archive),
+        Baseline::Tar => CommandSpec {
+            program: "sh".to_string(),
+            args: vec![
+                "-c".to_string(),
+                "set -eu; \"$1\" -cf - -C \"$2\" . | \"$3\" -q --fast=3 -f -o \"$4\"".to_string(),
+                "sh".to_string(),
+                tar_bin.display().to_string(),
+                paths.input_dir.display().to_string(),
+                zstd_bin.display().to_string(),
+                archive.display().to_string(),
+            ],
+        },
     }
 }
 
 pub fn build_unpack_command(
     job: &BenchmarkJob,
+    paths: &BenchmarkPaths,
     sfa_bin: &Path,
     tar_bin: &Path,
-    codec_bin: &Path,
+    zstd_bin: &Path,
 ) -> CommandSpec {
-    let archive = archive_path(job);
-    let unpack_to = unpack_dir(job);
+    let archive = archive_path(job, paths);
+    let unpack_to = unpack_dir(job, paths);
     match job.baseline {
         Baseline::Sfa => CommandSpec {
             program: sfa_bin.display().to_string(),
@@ -163,57 +140,18 @@ pub fn build_unpack_command(
                 "json".to_string(),
             ],
         },
-        Baseline::Tar => build_tar_unpack_command(job, tar_bin, codec_bin, &archive, &unpack_to),
-    }
-}
-
-fn build_tar_pack_command(
-    job: &BenchmarkJob,
-    tar_bin: &Path,
-    codec_bin: &Path,
-    archive: &Path,
-) -> CommandSpec {
-    let codec_script = match job.codec {
-        Codec::Lz4 => "\"$3\" -q -f - \"$4\"",
-        Codec::Zstd => "\"$3\" -q -f -o \"$4\"",
-    };
-    CommandSpec {
-        program: "sh".to_string(),
-        args: vec![
-            "-c".to_string(),
-            format!("set -eu; \"$1\" -cf - -C \"$2\" . | {codec_script}"),
-            "sh".to_string(),
-            tar_bin.display().to_string(),
-            job.case.input_dir.display().to_string(),
-            codec_bin.display().to_string(),
-            archive.display().to_string(),
-        ],
-    }
-}
-
-fn build_tar_unpack_command(
-    job: &BenchmarkJob,
-    tar_bin: &Path,
-    codec_bin: &Path,
-    archive: &Path,
-    unpack_to: &Path,
-) -> CommandSpec {
-    let codec_script = match job.codec {
-        Codec::Lz4 => "\"$1\" -q -d -c \"$2\"",
-        Codec::Zstd => "\"$1\" -q -d -c \"$2\"",
-    };
-    let _ = job;
-    CommandSpec {
-        program: "sh".to_string(),
-        args: vec![
-            "-c".to_string(),
-            format!("set -eu; {codec_script} | \"$3\" -xf - -C \"$4\""),
-            "sh".to_string(),
-            codec_bin.display().to_string(),
-            archive.display().to_string(),
-            tar_bin.display().to_string(),
-            unpack_to.display().to_string(),
-        ],
+        Baseline::Tar => CommandSpec {
+            program: "sh".to_string(),
+            args: vec![
+                "-c".to_string(),
+                "set -eu; \"$1\" -q -d -c \"$2\" | \"$3\" -xf - -C \"$4\"".to_string(),
+                "sh".to_string(),
+                zstd_bin.display().to_string(),
+                archive.display().to_string(),
+                tar_bin.display().to_string(),
+                unpack_to.display().to_string(),
+            ],
+        },
     }
 }
 
@@ -233,28 +171,42 @@ fn shell_escape(arg: &str) -> String {
 mod tests {
     use std::path::Path;
 
+    use crate::workload::BenchmarkWorkload;
+
     use super::{
-        Baseline, BenchmarkJob, Codec, DatasetCase, build_pack_command, build_unpack_command,
+        Baseline, BenchmarkJob, build_pack_command, build_unpack_command, default_jobs,
+        dry_run_paths,
     };
 
-    fn sfa_job() -> BenchmarkJob {
-        BenchmarkJob {
-            baseline: Baseline::Sfa,
-            codec: Codec::Lz4,
-            case: DatasetCase {
-                name: "case".to_string(),
-                input_dir: "input".into(),
-                output_dir: "output".into(),
-            },
-        }
+    #[test]
+    fn default_jobs_only_include_sfa_and_tar() {
+        let jobs = default_jobs();
+        assert_eq!(jobs.len(), 2);
+        assert!(jobs.iter().any(|job| job.baseline == Baseline::Sfa));
+        assert!(jobs.iter().any(|job| job.baseline == Baseline::Tar));
     }
 
     #[test]
     fn sfa_commands_request_json_stats() {
-        let job = sfa_job();
-        let pack = build_pack_command(&job, Path::new("sfa"), Path::new("tar"), Path::new("lz4"));
-        let unpack =
-            build_unpack_command(&job, Path::new("sfa"), Path::new("tar"), Path::new("lz4"));
+        let workload = BenchmarkWorkload::load_default().expect("workload");
+        let paths = dry_run_paths(&workload);
+        let job = BenchmarkJob {
+            baseline: Baseline::Sfa,
+        };
+        let pack = build_pack_command(
+            &job,
+            &paths,
+            Path::new("sfa"),
+            Path::new("tar"),
+            Path::new("zstd"),
+        );
+        let unpack = build_unpack_command(
+            &job,
+            &paths,
+            Path::new("sfa"),
+            Path::new("tar"),
+            Path::new("zstd"),
+        );
 
         assert!(
             pack.args
@@ -267,5 +219,35 @@ mod tests {
                 .windows(2)
                 .any(|pair| pair == ["--stats-format", "json"])
         );
+    }
+
+    #[test]
+    fn tar_commands_use_canonical_zstd_fast_3_pipeline() {
+        let workload = BenchmarkWorkload::load_default().expect("workload");
+        let paths = dry_run_paths(&workload);
+        let job = BenchmarkJob {
+            baseline: Baseline::Tar,
+        };
+        let pack = build_pack_command(
+            &job,
+            &paths,
+            Path::new("sfa"),
+            Path::new("tar"),
+            Path::new("zstd"),
+        );
+        let unpack = build_unpack_command(
+            &job,
+            &paths,
+            Path::new("sfa"),
+            Path::new("tar"),
+            Path::new("zstd"),
+        );
+
+        assert_eq!(pack.program, "sh");
+        assert!(pack.args.iter().any(|arg| arg.contains("--fast=3")));
+        assert!(unpack.args.iter().any(|arg| arg.contains("-d -c")));
+        assert!(pack.to_shell_line().contains("zstd"));
+        assert!(!pack.to_shell_line().contains("lz4"));
+        assert!(!unpack.to_shell_line().contains("lz4"));
     }
 }

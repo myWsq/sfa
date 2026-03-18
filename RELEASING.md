@@ -44,7 +44,7 @@ The current repository release train is preparing the first stable `v1.0.0` rele
 - Release class: `major`
 - Candidate revision: the current `main` branch after `v0.3.0`
 - Included post-`v0.3.0` change: unpack directory setup now does more bounded preparation before the worker pipeline begins
-- Extra release-prep requirement: refresh `benches/results/baseline-v0.1.0.json` and validate it with `cargo test -p sfa-bench`
+- Extra release-prep requirement: refresh `benches/results/baseline-v0.1.0.json` for the default `node_modules-100k` benchmark path and validate it with `cargo test -p sfa-bench`
 - Deferred from `v1.0.0`: xattrs, ACLs, special-file restore, broader Unix extensions, non-Unix parity, crates.io distribution, and installer / notarization work
 
 Exact handoff commands for the current stable release train:
@@ -117,7 +117,7 @@ cargo run -p sfa-bench --bin tar_vs_sfa -- --dry-run --output benches/results/la
 
 These commands form the repository's authoritative release checklist.
 
-If the release changes benchmark logic, default datasets, planner or pipeline behavior, codec integration, or the benchmark support environment, refresh the committed benchmark baseline as well and describe that refresh in the release notes:
+If the release changes benchmark logic, the default workload recipe, the default SFA command profile, the canonical `tar | zstd --fast=3` baseline, planner or pipeline behavior, result schema, unpack observability, or the benchmark support environment, refresh the committed benchmark baseline as well and describe that refresh in the release notes:
 
 ```bash
 CARGO_HOME=/tmp/cargo-home cargo build --release -p sfa-cli
@@ -129,14 +129,16 @@ CARGO_HOME=/tmp/cargo-home cargo build --release -p sfa-cli
 
 After refreshing the baseline, confirm that `benches/results/baseline-v0.1.0.json` is committed and that `cargo test -p sfa-bench` still validates the asset.
 
-If the release does not change benchmark behavior, datasets, or result schema, the benchmark dry run remains mandatory but a fresh committed baseline is not required.
+If the release does not change benchmark behavior, workload recipe, command profile, or result schema, the benchmark dry run remains mandatory but a fresh committed baseline is not required.
 
-For the current `v1.0.0` release train, a committed baseline refresh is required because the selected candidate revision includes benchmark-affecting unpack setup changes beyond `v0.3.0`.
+For the current `v1.0.0` release train, a committed baseline refresh is required because the selected candidate revision includes benchmark-affecting unpack setup changes and the benchmark contract has been realigned around the default `node_modules-100k` workload.
 
 If benchmark evidence is part of the release claim, also confirm that the committed baseline includes:
 
 - `environment.resource_sampler` aligned with the documented support environment
+- `workload.recipe_path` pointing at the committed workload recipe asset
 - Command wall-time for each execution record
+- `files_per_sec`, `mib_per_sec`, and `output_size_bytes` for each execution record
 - Pack phase-level `sfa_stats` for SFA runs, plus unpack additive `wall_breakdown` and diagnostic `phase_breakdown`
 - `user_cpu_ms`, `system_cpu_ms`, and `max_rss_kib` where the support environment provides them
 - Unpack additive `sfa_stats.wall_breakdown` fields named `setup`, `pipeline`, and `finalize`
