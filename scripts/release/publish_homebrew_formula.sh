@@ -66,14 +66,14 @@ pushd "$tap_checkout" >/dev/null
 git config user.name "${GIT_AUTHOR_NAME:-github-actions[bot]}"
 git config user.email "${GIT_AUTHOR_EMAIL:-41898282+github-actions[bot]@users.noreply.github.com}"
 
-if git diff --quiet -- Formula/sfa.rb Formula/sfa-cli.rb; then
+git add -A -- Formula
+
+if git diff --cached --quiet -- Formula/sfa.rb Formula/sfa-cli.rb; then
   printf 'Homebrew tap %s already matches %s\n' "$tap_repo" "$release_tag"
   popd >/dev/null
   exit 0
 fi
 
-git add Formula/sfa.rb
-git rm -f --ignore-unmatch Formula/sfa-cli.rb >/dev/null 2>&1 || true
 git commit -m "Update sfa formula for ${release_tag}"
 git push origin HEAD
 popd >/dev/null
